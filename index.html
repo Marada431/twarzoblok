@@ -13,27 +13,66 @@
         <input class="suchemashine" type="text" name="wyszukiwarka" placeholder="Szukaj na TwarzBlok">
     </div>
     <div class="navbar-links">
-        <a href="index.html">Dom</a>
-        <a href="wiadomosci.html">Wiadomości</a>
-        <a href="gra.html">Gry</a>
+        <a href="#"><svg>
+            <use xlink:href="./icons/symbol-defs.svg#icon-home"></use>
+        </svg></a>
+        <a href="#"><svg>
+            <use xlink:href="./icons/symbol-defs.svg#icon-film"></use>
+        </svg></a>
+        <a href="#"><svg>
+            <use xlink:href="./icons/symbol-defs.svg#icon-users"></use>
+        </svg></a>
+        <a href="#"><svg>
+            <use xlink:href="./icons/symbol-defs.svg#icon-briefcase"></use>
+        </svg></a>
+        <a href="#"><svg>
+            <use xlink:href="./icons/symbol-defs.svg#icon-bubbles4"></use>
+        </svg></a>
     </div>
-    <div>
-        <a href="rejestracja.html" class="btn btn-secondary">Wyloguj się</a>
+    <div class="navbar-links2">
+        <a href="#"><div class="icon-wrapper"><svg>
+            <use xlink:href="./icons/symbol-defs.svg#icon-list2"></use>
+        </svg></div></a>
+        <a href="#"><div class="icon-wrapper"><svg>
+            <use xlink:href="./icons/symbol-defs.svg#icon-bubbles2"></use>
+        </svg></div></a>
+        <a href="#"><div class="icon-wrapper"><svg>
+            <use xlink:href="./icons/symbol-defs.svg#icon-bell"></use>
+        </svg></div></a>
+        <a href="#"><div class="icon-wrapper"><svg>
+            <use xlink:href="./icons/symbol-defs.svg#icon-user"></use>
+        </svg></div></a>
     </div>
 </nav>
 
 <div class="fb-container">
 
-    <aside class="sidebar-left card">
+    <aside class="sidebar-left card2">
         <h3 class="m-bottom-10">Menu</h3>
         <ul class="menu-list">
-            <li><a href="#">Znajomi</a></li>
-            <li><a href="#">Grupy</a></li>
-            <li><a href="gra.html">Mini Gry</a></li>
-            <li><a href="wiadomosci.html">Wiadomości (Czat)</a></li> </ul>
+            <li><div class="icon-wrapper"><svg>
+                <use xlink:href="./icons/symbol-defs.svg#icon-users"></use>
+            </svg></div><a href="#">Znajomi</a></li>
+            <li><div class="icon-wrapper"><svg>
+                <use xlink:href="./icons/symbol-defs.svg#icon-star-empty"></use>
+            </svg></div><a href="#">Grupy</a></li>
+            <li><div class="icon-wrapper"><svg>
+                <use xlink:href="./icons/symbol-defs.svg#icon-bubbles4"></use>
+            </svg></div><a href="gra.html">Mini Gry</a></li>
+            <li><div class="icon-wrapper"><svg>
+                <use xlink:href="./icons/symbol-defs.svg#icon-briefcase"></use>
+            </svg></div><a href="wiadomosci.html">Wiadomości (Czat)</a></li> </ul>
     </aside>
 
     <main class="feed">
+
+        <div class="card">
+            <div class="post-create-box">
+                <div class="avatar"></div>
+                <input type="text" class="form-input" placeholder="O czym teraz myślisz?">
+                <button class="btn btn-primary pull-right">Opublikuj post</button>
+            </div>
+        </div>
         <h4 class="reels-section-title">Krótkie formy wideo (Reels)</h4>
         <div class="reels-container">
             <div class="reel-card"><div class="reel-badge">@janek_wideo</div></div>
@@ -41,17 +80,8 @@
             <div class="reel-card"><div class="reel-badge">@gaming_clip</div></div>
         </div>
 
-        <div class="card">
-            <div class="post-create-box">
-                <div class="avatar"></div>
-                <input type="text" class="form-input" placeholder="O czym teraz myślisz?">
-            </div>
-            <div class="post-create-box">
-                <button class="btn btn-primary pull-right">Opublikuj post</button>
-            </div>
-        </div>
 
-        <div class="card">
+        <div class="card1">
             <div class="post-header">
                 <div class="avatar"></div>
                 <div>
@@ -60,18 +90,14 @@
                 </div>
             </div>
             <div class="post-content">
-                Siema! Zielony motyw na TwarzBloku wygląda mega świeżo. Layout śmiga aż miło!
-            </div>
-            <div class="post-actions">
-                <button class="btn btn-secondary">Lubię to</button>
-                <button class="btn btn-secondary">Komentuj</button>
+                "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."
             </div>
         </div>
     </main>
 
     <aside class="sidebar-right card">
         <h3 class="m-bottom-15">Kontakty (Czat)</h3>
-        <div class="contact-item" onclick="window.location.href='wiadomosci.html'">
+        <div class="contact-item2" onclick="window.location.href='wiadomosci.html'">
             <div class="avatar online"></div>
             <span>Anna Kowalska</span>
         </div>
