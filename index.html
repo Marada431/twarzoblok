@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TwarzBlok - Strona Główna</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<nav class="navbar">
+    <div class="navbar-brand">TwarzBlok
+        <input class="suchemashine" type="text" name="wyszukiwarka" placeholder="Szukaj na TwarzBlok">
+    </div>
+    <div class="navbar-links">
+        <a href="index.html">Dom</a>
+        <a href="wiadomosci.html">Wiadomości</a>
+        <a href="gra.html">Gry</a>
+    </div>
+    <div>
+        <a href="rejestracja.html" class="btn btn-secondary">Wyloguj się</a>
+    </div>
+</nav>
+
+<div class="fb-container">
+
+    <aside class="sidebar-left card">
+        <h3 class="m-bottom-10">Menu</h3>
+        <ul class="menu-list">
+            <li><a href="#">Znajomi</a></li>
+            <li><a href="#">Grupy</a></li>
+            <li><a href="gra.html">Mini Gry</a></li>
+            <li><a href="wiadomosci.html">Wiadomości (Czat)</a></li> </ul>
+    </aside>
+
+    <main class="feed">
+        <h4 class="reels-section-title">Krótkie formy wideo (Reels)</h4>
+        <div class="reels-container">
+            <div class="reel-card"><div class="reel-badge">@janek_wideo</div></div>
+            <div class="reel-card"><div class="reel-badge">@smieszne_koty</div></div>
+            <div class="reel-card"><div class="reel-badge">@gaming_clip</div></div>
+        </div>
+
+        <div class="card">
+            <div class="post-create-box">
+                <div class="avatar"></div>
+                <input type="text" class="form-input" placeholder="O czym teraz myślisz?">
+            </div>
+            <div class="post-create-box">
+                <button class="btn btn-primary pull-right">Opublikuj post</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="post-header">
+                <div class="avatar"></div>
+                <div>
+                    <div class="post-author">Kamil Nowak</div>
+                    <div class="post-time">Przed chwilą • Publiczny</div>
+                </div>
+            </div>
+            <div class="post-content">
+                Siema! Zielony motyw na TwarzBloku wygląda mega świeżo. Layout śmiga aż miło!
+            </div>
+            <div class="post-actions">
+                <button class="btn btn-secondary">Lubię to</button>
+                <button class="btn btn-secondary">Komentuj</button>
+            </div>
+        </div>
+    </main>
+
+    <aside class="sidebar-right card">
+        <h3 class="m-bottom-15">Kontakty (Czat)</h3>
+        <div class="contact-item" onclick="window.location.href='wiadomosci.html'">
+            <div class="avatar online"></div>
+            <span>Anna Kowalska</span>
+        </div>
+        <div class="contact-item" onclick="window.location.href='wiadomosci.html'">
+            <div class="avatar online"></div>
+            <span>Piotr Zieliński</span>
+        </div>
+    </aside>
+
+</div>
+
+</body>
+</html>
