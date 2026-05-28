@@ -76,7 +76,7 @@ hr {
    ========================================== */
 .fb-container {
     display: grid;
-    grid-template-columns: 280px 1fr 360px;
+    grid-template-columns: 580px 1fr 360px;
     gap: 20px;
     margin: 0 auto;
     padding: 20px;
@@ -121,7 +121,7 @@ hr {
 .navbar-links {
     display: flex;
     gap: 60px;
-    margin-left: -400px;
+    margin-left: -420px;
     margin-top: 10px;
 }
 
@@ -135,8 +135,7 @@ hr {
    4. UNIWERSALNE KOMPONENTY
    ========================================== */
 .card {
-    padding: 16px;
-    margin-bottom: 20px;
+    margin-top: 10px;
 }
 
 /* Przyciski */
@@ -253,19 +252,17 @@ hr {
     justify-content: space-around;
 }
 
-/* Krótkie formy wideo (Reels) */
 .reels-section-title {
     margin-bottom: 8px;
     color: var(--text-muted);
-    margin-left: 15px;
 }
+
 .reels-container {
     display: flex;
     gap: 10px;
-    overflow-x: auto;
     padding-bottom: 15px;
-    margin-left: 15px;
 }
+
 .reel-card {
     min-width: 110px;
     height: 200px;
@@ -276,6 +273,7 @@ hr {
     cursor: pointer;
     border: 1px solid var(--border-color);
 }
+
 .reel-badge {
     position: absolute;
     bottom: 8px;
@@ -286,7 +284,6 @@ hr {
     text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
 }
 
-/* Panel Logowania / Rejestracji */
 .auth-wrapper {
     display: flex;
     flex-direction: column;
@@ -295,6 +292,7 @@ hr {
     min-height: 100vh;
     padding: 20px;
 }
+
 .auth-logo {
     color: var(--primary-color);
     margin-bottom: 20px;
@@ -302,11 +300,13 @@ hr {
     font-weight: 800;
     letter-spacing: -1px;
 }
+
 .auth-card {
     width: 100%;
     max-width: 450px;
     padding: 25px;
 }
+
 .auth-links {
     text-align: center;
     display: flex;
@@ -421,14 +421,14 @@ img {
 .card1{
     display: flex;
     justify-content: center;
-    gap: 10px;
+    gap: 20px;
     background-color: white;
     border-radius: 10px;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.05);
     max-width: 600px;
     width: 100%;
     align-items: center;
-    padding: 16px;
+    padding: 20px;
     margin-bottom: 20px;
 }
 
@@ -439,24 +439,83 @@ img {
     border-radius: 10px;
 }
 
-
 .icon-wrapper {
-    display: inline-flex;    /* Centruje ikonę idealnie w środku dymka */
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-
     margin-right: 10px;
     background-color: #dcd2d2;
-
-    /* Tutaj dajesz duże zaokrąglenie i padding */
     border-radius: 100px;
-    padding: 8px 10px;      /* Możesz to teraz dowolnie powiększać! */
+    padding: 10px 12px;
     box-sizing: border-box;
 }
 
-/* Bezpieczny, stały rozmiar dla samej ikony w środku */
 .icon-wrapper svg {
-    width: 24px;            /* Szerokość samej ikony */
-    height: 24px;           /* Wysokość samej ikony */
+    width: 24px;
+    height: 24px;
     display: block;
+}
+
+.avatar-navbar-wrapper{
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--border-color, #e2e8f0);
+}
+
+.user-profile-dropdown {
+    position: relative;
+    display: inline-block;
+    padding-bottom: 6px;
+    margin-bottom: -6px;
+}
+
+.dropdown-menu-content {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: 52px;
+    background-color: #ffffff;
+    min-width: 150px;
+    box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.15);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+/* "Mostek" nad menu - teraz jest solidny i biały */
+.dropdown-menu-content::before {
+    content: '';
+    position: absolute;
+    top: -10px; /* Wysokość dopasowana do szczeliny */
+    left: -1px; /* Wyrównanie do lewej ramki menu */
+    width: calc(100% + 2px); /* Rozszerzenie, żeby pokryć boczne ramki */
+    height: 10px;
+    background-color: #ffffff; /* ZMIENIONO: Stały biały kolor zamiast przezroczystego */
+    border-left: 1px solid #e2e8f0; /* Dodajemy boczne ramki do mostka */
+    border-right: 1px solid #e2e8f0;
+    border-top: 1px solid #e2e8f0; /* Górna krawędź menu */
+    border-radius: 8px 8px 0 0; /* Zaokrąglenie przeniesione na samą górę całego bloku */
+}
+
+/* Pojawienie się menu po najechaniu */
+.user-profile-dropdown:hover .dropdown-menu-content {
+    display: block;
+}
+
+.dropdown-item {
+    padding: 12px 16px;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    font-size: 14px;
+    position: relative;
+    justify-content: center;
+}
+
+.dropdown-item.logout-btn:hover {
+    color: #ef4444;
 }

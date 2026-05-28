@@ -1,9 +1,15 @@
-<!DOCTYPE html>
-<html lang="pl">
+<?php
+session_start();
+?>
+
+<!doctype html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TwarzBlok - Strona Główna</title>
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -12,53 +18,88 @@
     <div class="navbar-brand">TwarzBlok
         <input class="suchemashine" type="text" name="wyszukiwarka" placeholder="Szukaj na TwarzBlok">
     </div>
+<!--    IKONY-->
     <div class="navbar-links">
         <a href="#"><svg>
             <use xlink:href="./icons/symbol-defs.svg#icon-home"></use>
         </svg></a>
+
         <a href="#"><svg>
             <use xlink:href="./icons/symbol-defs.svg#icon-film"></use>
         </svg></a>
+
         <a href="#"><svg>
             <use xlink:href="./icons/symbol-defs.svg#icon-users"></use>
         </svg></a>
+
         <a href="#"><svg>
             <use xlink:href="./icons/symbol-defs.svg#icon-briefcase"></use>
         </svg></a>
+
         <a href="#"><svg>
             <use xlink:href="./icons/symbol-defs.svg#icon-bubbles4"></use>
         </svg></a>
     </div>
+
     <div class="navbar-links2">
         <a href="#"><div class="icon-wrapper"><svg>
             <use xlink:href="./icons/symbol-defs.svg#icon-list2"></use>
         </svg></div></a>
+
         <a href="#"><div class="icon-wrapper"><svg>
             <use xlink:href="./icons/symbol-defs.svg#icon-bubbles2"></use>
         </svg></div></a>
+
         <a href="#"><div class="icon-wrapper"><svg>
             <use xlink:href="./icons/symbol-defs.svg#icon-bell"></use>
         </svg></div></a>
-        <a href="#"><div class="icon-wrapper"><svg>
-            <use xlink:href="./icons/symbol-defs.svg#icon-user"></use>
-        </svg></div></a>
+
+        <?php if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true): ?>
+            <div class="user-profile-dropdown">
+                <div class="avatar-navbar-wrapper">
+                    <?php if (!empty($_SESSION['avatar_url'])): ?>
+                        <img src="<?php echo htmlspecialchars($_SESSION['avatar_url']); ?>" alt="Profil" style="width: 100%; height: 100%; object-fit: cover; display: block;">
+                    <?php else: ?>
+                        <svg style="width: 24px; height: 24px;"><use xlink:href="./icons/symbol-defs.svg#icon-user"></use></svg>
+                    <?php endif; ?>
+                </div>
+
+                <div class="dropdown-menu-content">
+                    <a href="logout.php" class="dropdown-item logout-btn"><svg>
+                            <use xlink:href="./icons/symbol-defs.svg#icon-user"></use>
+                        </svg>
+                        <span class="icon"></span> Wyloguj się
+                    </a>
+                </div>
+            </div>
+        <?php else: ?>
+            <a href="login.php">
+                <div class="icon-wrapper">
+                    <svg><use xlink:href="./icons/symbol-defs.svg#icon-user"></use></svg>
+                </div>
+            </a>
+        <?php endif; ?>
     </div>
 </nav>
 
 <div class="fb-container">
 
     <aside class="sidebar-left card2">
+
         <h3 class="m-bottom-10">Menu</h3>
         <ul class="menu-list">
             <li><div class="icon-wrapper"><svg>
                 <use xlink:href="./icons/symbol-defs.svg#icon-users"></use>
             </svg></div><a href="#">Znajomi</a></li>
+
             <li><div class="icon-wrapper"><svg>
                 <use xlink:href="./icons/symbol-defs.svg#icon-star-empty"></use>
             </svg></div><a href="#">Grupy</a></li>
+
             <li><div class="icon-wrapper"><svg>
                 <use xlink:href="./icons/symbol-defs.svg#icon-bubbles4"></use>
             </svg></div><a href="gra.html">Mini Gry</a></li>
+
             <li><div class="icon-wrapper"><svg>
                 <use xlink:href="./icons/symbol-defs.svg#icon-briefcase"></use>
             </svg></div><a href="wiadomosci.html">Wiadomości (Czat)</a></li> </ul>

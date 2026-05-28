@@ -18,4 +18,4 @@ session_destroy();
 // Przekierowanie na stronę logowania
 header('Location: login.php');
 exit;
-?><?php
+?>

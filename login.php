@@ -201,7 +201,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             <div class="register-link">
                 <span class="text-muted">Nie masz konta?</span>
-                <a href="register.php">Zarejestruj się</a>
+                <a href="register_step1.php">Zarejestruj się</a>
             </div>
         </form>
     </div>
