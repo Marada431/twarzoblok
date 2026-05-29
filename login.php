@@ -1,7 +1,7 @@
 <?php
 session_start();
 
-// Jeśli użytkownik jest już zalogowany, przekieruj na stronę główną
+// Sprwadza czy jest się zalogowanym
 if (isset($_SESSION['user_id'])) {
     header('Location: index.php');
     exit;
@@ -20,7 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($login_input) || empty($password)) {
         $error = 'Wszystkie pola są wymagane.';
     } else {
-        // Automatyczne wykrywanie typu danych (telefon, email, nazwa użytkownika)
+        // Wykrywa czy to numer telefonu login albo mail
         $field_type = 'username'; // domyślnie
 
         if (filter_var($login_input, FILTER_VALIDATE_EMAIL)) {
@@ -52,7 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $updateStmt = $db->prepare("UPDATE users SET last_login_at = NOW() WHERE user_id = :user_id");
                     $updateStmt->execute([':user_id' => $user['user_id']]);
 
-                    // Zapisz dane w sesji
+                    // Wszysto do sesji dla łatwiejszego robienia strony
                     $_SESSION['user_id'] = $user['user_id'];
                     $_SESSION['username'] = $user['username'];
                     $_SESSION['first_name'] = $user['first_name'];
@@ -62,18 +62,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_SESSION['avatar_url'] = $user['avatar_url'];
                     $_SESSION['logged_in'] = true;
 
-                    // TODO: Obsługa "Zapamiętaj mnie" (do implementacji później)
+                    // Zamiepiętaj mnie do zrobnieania na przyszłość
                     if (isset($_POST['remember_me'])) {
-                        // Placeholder dla przyszłej implementacji (np. długotrwały cookie/token)
+
                     }
 
-                    // Przekierowanie na stronę główną
+
                     header('Location: index.php');
                     exit;
                 }
             } else {
                 $error = 'Nieprawidłowy login lub hasło.';
-                // Logowanie próby nieudanego logowania (opcjonalne)
+               // Jeśli logowannie się nie uda do rozszerzenia na przyszłość aby bardziej pokazywało co nie tak
                 error_log("Nieudana próba logowania dla: " . $login_input);
             }
         } catch (PDOException $e) {

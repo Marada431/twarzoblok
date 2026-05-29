@@ -3,7 +3,7 @@
 session_start();
 require_once __DIR__ . '/config/database.php';
 
-// Konfiguracja uploadu avatara
+// Dane do zdjęcia profilowego
 define('AVATAR_UPLOAD_DIR', __DIR__ . '/upload_img/user_avatar/');
 define('MAX_AVATAR_SIZE', 2 * 1024 * 1024); // 2 MB
 define('ALLOWED_AVATAR_TYPES', ['image/jpeg', 'image/png', 'image/webp']);
@@ -21,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // Walidacja username
+    // Walidacja nazwy użytkwonika
     if (!isset($errors['username'])) {
         $username = trim($_POST['username']);
         if (strlen($username) < 3 || strlen($username) > 50) {
@@ -98,7 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // Walidacja telefonu (opcjonalne)
+    // Walidacja telefonu
     $phone = null;
     if (!empty($_POST['phone'])) {
         $phone = trim($_POST['phone']);
@@ -162,7 +162,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // Jeśli brak błędów - zapis do bazy
+    // zapis do bazy
     if (empty($errors)) {
         try {
             $password_hash = password_hash($password, PASSWORD_DEFAULT);

@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $street = trim($_POST['street'] ?? '');
     $house_number = trim($_POST['house_number'] ?? '');
 
-    // Validate required fields
+    // Sprawdzanie wymaganych pól
     $required = [
         'country' => 'Country',
         'city' => 'City',
@@ -37,17 +37,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // Postal code validation (XX-XXX format)
+    // Sprawdzenie formatu kody pocztowego
     if (!isset($errors['postal_code']) && !preg_match('/^\d{2}-\d{3}$/', $postal_code)) {
         $errors['postal_code'] = 'Postal code must be in XX-XXX format (e.g., 00-000).';
     }
 
-    // House number validation
+    // Sprawdzenie numeru domu
     if (!isset($errors['house_number']) && !preg_match('/^[1-9]\d{0,3}[a-zA-Z]?(\/\d{1,3}[a-zA-Z]?)?$/', $house_number)) {
         $errors['house_number'] = 'Enter a valid house number (e.g., 12 or 12/4).';
     }
 
-    // Field length validation
+    // Walidacja długości pól
     if (!isset($errors['country']) && strlen($country) > 100) $errors['country'] = 'Maximum 100 characters.';
     if (!isset($errors['state']) && strlen($state) > 100) $errors['state'] = 'Maximum 100 characters.';
     if (!isset($errors['city']) && strlen($city) > 100) $errors['city'] = 'Maximum 100 characters.';
@@ -56,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (empty($errors)) {
         try {
-            // Get user_id
+            // USer id z sesji
             $stmt = $pdo->prepare("SELECT user_id FROM users WHERE email = ?");
             $stmt->execute([$email]);
             $user = $stmt->fetch();
@@ -67,29 +67,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $uid = $user['user_id'];
 
-            // Begin transaction
+
             $pdo->beginTransaction();
 
-            // Update city in users table
+            // Dodanie pola miasto do tabeli użytkownik
             $stmt = $pdo->prepare("UPDATE users SET city = ? WHERE user_id = ?");
             $stmt->execute([$city, $uid]);
 
-            // Insert address
+            // Dodanie adresu
             $stmt = $pdo->prepare(
                 "INSERT INTO addresses (user_id, country, state, postal_code, municipality, city, street, house_number) 
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
             );
             $stmt->execute([$uid, $country, $state, $postal_code, $municipality, $city, $street, $house_number]);
 
-            // Commit transaction
+
             $pdo->commit();
 
-            // Clear session after successful registration
+            // Czyści sesje po udanym zajestrowaniu
             unset($_SESSION['email']);
             $msg = 'Registration completed successfully! You can now log in.';
 
         } catch (PDOException $e) {
-            // Rollback on error
+
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
             }
