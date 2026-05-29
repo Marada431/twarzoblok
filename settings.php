@@ -474,7 +474,7 @@ a:hover { text-decoration: underline; }
 
 <!-- NAVBAR -->
 <nav class="navbar">
-    <span class="navbar-brand">TwarzBlok</span>
+    <a href="index.php" class="navbar-brand">TwarzBlok</a>
     <span class="navbar-user"><?= h($prof['first_name'] . ' ' . $prof['last_name']) ?></span>
 </nav>
 

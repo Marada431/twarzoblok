@@ -13,7 +13,7 @@
     <div class="navbar-brand">TwarzBlok 💬</div>
     <div class="navbar-links">
         <a href="index.php">🏠 Dom</a>
-        <a href="gra.html">🎮 Gry</a>
+        <a href="games.php">🎮 Gry</a>
     </div>
     <div>
         <a href="index.php" class="btn btn-secondary">Powrót do tablicy</a>

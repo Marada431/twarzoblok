@@ -20,25 +20,25 @@ session_start();
     </div>
 <!--    IKONY-->
     <div class="navbar-links">
-        <a href="#"><svg>
-            <use xlink:href="./icons/symbol-defs.svg#icon-home"></use>
-        </svg></a>
+        <a href="index.php">
+            <svg><use xlink:href="./icons/symbol-defs.svg#icon-home"></use></svg>
+        </a>
 
-        <a href="#"><svg>
-            <use xlink:href="./icons/symbol-defs.svg#icon-film"></use>
-        </svg></a>
+        <a href="games.php">
+            <svg><use xlink:href="./icons/symbol-defs.svg#icon-film"></use></svg>
+        </a>
 
-        <a href="#"><svg>
-            <use xlink:href="./icons/symbol-defs.svg#icon-users"></use>
-        </svg></a>
+        <a href="#">
+            <svg><use xlink:href="./icons/symbol-defs.svg#icon-users"></use></svg>
+        </a>
 
-        <a href="#"><svg>
-            <use xlink:href="./icons/symbol-defs.svg#icon-briefcase"></use>
-        </svg></a>
+        <a href="#">
+            <svg><use xlink:href="./icons/symbol-defs.svg#icon-briefcase"></use></svg>
+        </a>
 
-        <a href="#"><svg>
-            <use xlink:href="./icons/symbol-defs.svg#icon-bubbles4"></use>
-        </svg></a>
+        <a href="messages.php">
+            <svg><use xlink:href="./icons/symbol-defs.svg#icon-bubbles4"></use></svg>
+        </a>
     </div>
 
     <div class="navbar-links2">
@@ -65,6 +65,12 @@ session_start();
                 </div>
 
                 <div class="dropdown-menu-content">
+                    <a href="settings.php" class="dropdown-item settings-btn">
+                        <svg>
+                            <use xlink:href="./icons/symbol-defs.svg#icon-user"></use> </svg>
+                        Ustawienia i prywatność
+                    </a>
+
                     <a href="logout.php" class="dropdown-item logout-btn"><svg>
                             <use xlink:href="./icons/symbol-defs.svg#icon-user"></use>
                         </svg>
@@ -98,22 +104,68 @@ session_start();
 
             <li><div class="icon-wrapper"><svg>
                 <use xlink:href="./icons/symbol-defs.svg#icon-bubbles4"></use>
-            </svg></div><a href="gra.html">Mini Gry</a></li>
+            </svg></div><a href="games.php">Mini Gry</a></li>
 
             <li><div class="icon-wrapper"><svg>
                 <use xlink:href="./icons/symbol-defs.svg#icon-briefcase"></use>
-            </svg></div><a href="wiadomosci.html">Wiadomości (Czat)</a></li> </ul>
+            </svg></div><a href="messages.php">Wiadomości (Czat)</a></li> </ul>
     </aside>
 
     <main class="feed">
 
         <div class="card">
-            <div class="post-create-box">
-                <div class="avatar"></div>
-                <input type="text" class="form-input" placeholder="O czym teraz myślisz?">
-                <button class="btn btn-primary pull-right">Opublikuj post</button>
+            <div class="post-create-container" style="background-color: var(--bg-surface); border-radius: 10px; padding: 12px 16px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1); max-width: 600px; width: 100%; margin-bottom: 15px;">
+
+                <div class="post-create-top" style="display: flex; ; gap: 8px; padding-bottom: 12px;">
+
+                    <div class="avatar-navbar-wrapper" style="width: 40px; height: 40px; flex-shrink: 0;">
+                        <?php if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && !empty($_SESSION['avatar_url'])): ?>
+                            <img src="<?php echo htmlspecialchars($_SESSION['avatar_url']); ?>" alt="Twój profil" style="width: 100%; height: 100%; object-fit: cover; display: block; border-radius: var(--radius-round);">
+                        <?php else: ?>
+
+                            <div class="avatar" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background-color: var(--border-color); border-radius: var(--radius-round);">
+                                <svg style="width: 20px; height: 20px; fill: var(--text-muted);"><use xlink:href="./icons/symbol-defs.svg#icon-user"></use></svg>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+
+                    <?php
+                    $placeholder_text = "O czym teraz myślisz?";
+                    if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && !empty($_SESSION['first_name'])) {
+                        $placeholder_text = "O czym teraz myślisz, " . htmlspecialchars($_SESSION['first_name']) . "?";
+                    }
+                    ?>
+                    <input type="text" class="form-input" placeholder="<?php echo $placeholder_text; ?>" style="flex-grow: 1; height: 40px; padding: 0 16px; border: 1px solid var(--border-color); border-radius: 20px; background-color: var(--bg-main); outline: none;">
+                </div>
+
+                <div class="post-create-bottom" style="display: flex; justify-content: space-between; align-items: center; padding-top: 10px; flex-wrap: wrap; gap: 10px;">
+                    <div class="post-create-actions" style="display: flex; gap: 15px;">
+
+                        <div class="action-item" style="display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 14px; font-weight: 600; cursor: pointer; padding: 6px 8px; border-radius: 6px; background: transparent;" onmouseover="this.style.backgroundColor='var(--bg-hover)'" onmouseout="this.style.backgroundColor='transparent'">
+                            <svg style="width: 18px; height: 18px; fill: var(--primary-color); display: inline-block;">
+                                <use xlink:href="./icons/symbol-defs.svg#icon-film"></use>
+                            </svg>
+                            Dodaj zdjęcie/film
+                        </div>
+
+                        <div class="action-item" style="display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 14px; font-weight: 600; cursor: pointer; padding: 6px 8px; border-radius: 6px; background: transparent;" onmouseover="this.style.backgroundColor='var(--bg-hover)'" onmouseout="this.style.backgroundColor='transparent'">
+                            <svg style="width: 18px; height: 18px; fill: #2e7d32; display: inline-block;">
+                                <use xlink:href="./icons/symbol-defs.svg#icon-users"></use>
+                            </svg>
+                            Oznacz osoby
+                        </div>
+
+                    </div>
+
+                    <a href="#" class="btn btn-primary" style="background-color: var(--primary-color); color: white; padding: 6px 20px; font-weight: 600; border-radius: 20px; text-decoration: none; display: inline-block; text-align: center;" onmouseover="this.style.backgroundColor='var(--primary-hover)'" onmouseout="this.style.backgroundColor='var(--primary-color)'">
+                        Opublikuj
+                    </a>
+                </div>
+
             </div>
         </div>
+
+
         <h4 class="reels-section-title">Krótkie formy wideo (Reels)</h4>
         <div class="reels-container">
             <div class="reel-card"><div class="reel-badge">@janek_wideo</div></div>

@@ -479,6 +479,7 @@ img {
     position: absolute;
     right: 0;
     top: 52px;
+    width: 250px;
     background-color: #ffffff;
     min-width: 150px;
     box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.15);
@@ -518,4 +519,22 @@ img {
 
 .dropdown-item.logout-btn:hover {
     color: #ef4444;
+}
+
+.create_post{
+    font-size: 20px;
+    display: flex;
+    justify-content: center;
+    font-weight: bold;
+}
+
+.navbar-links a svg {
+    width: 28px;
+    height: 28px;
+    fill: var(--primary-color);
+    transition: var(--transition);
+}
+
+.navbar-links a:hover svg {
+    fill: var(--primary-hover);
 }
