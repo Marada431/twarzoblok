@@ -42,17 +42,27 @@ session_start();
     </div>
 
     <div class="navbar-links2">
-        <a href="#"><div class="icon-wrapper"><svg>
-            <use xlink:href="./icons/symbol-defs.svg#icon-list2"></use>
-        </svg></div></a>
+        <?php if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && isset($_SESSION['role']) && $_SESSION['role'] === 'admin'): ?>
+            <a href="admin_panel.php" title="Panel Administratora">
+                <div class="icon-wrapper" style="background-color: rgba(230, 57, 70, 0.1); color: #e63946;">
+                    <svg style="fill: currentColor;">
+                        <use xlink:href="./icons/symbol-defs.svg#icon-list2"></use>
+                    </svg>
+                </div>
+            </a>
+        <?php endif; ?>
 
         <a href="#"><div class="icon-wrapper"><svg>
-            <use xlink:href="./icons/symbol-defs.svg#icon-bubbles2"></use>
-        </svg></div></a>
+                    <use xlink:href="./icons/symbol-defs.svg#icon-list2"></use>
+                </svg></div></a>
 
         <a href="#"><div class="icon-wrapper"><svg>
-            <use xlink:href="./icons/symbol-defs.svg#icon-bell"></use>
-        </svg></div></a>
+                    <use xlink:href="./icons/symbol-defs.svg#icon-bubbles2"></use>
+                </svg></div></a>
+
+        <a href="#"><div class="icon-wrapper"><svg>
+                    <use xlink:href="./icons/symbol-defs.svg#icon-bell"></use>
+                </svg></div></a>
 
         <?php if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true): ?>
             <div class="user-profile-dropdown">

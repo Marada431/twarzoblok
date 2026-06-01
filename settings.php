@@ -416,15 +416,17 @@ a:hover { text-decoration: underline; }
     padding: 14px 12px; cursor: pointer; transition: var(--tr);
     display: flex; flex-direction: column; gap: 4px;
     position: relative;
+    align-items: center;
 }
 .privacy-card input[type="radio"] { position: absolute; opacity: 0; }
 .privacy-card:has(input:checked) {
     border-color: var(--primary);
     background: #f0faf0;
 }
-.privacy-card-icon { font-size: 22px; }
+.privacy-card-icon { font-size: 22px;}
 .privacy-card-title { font-size: 13px; font-weight: 700; }
 .privacy-card-desc  { font-size: 11px; color: var(--text-muted); }
+svg {width: 50px; height: 50px}
 
 /* ── CARD FOOTER ────────────────────────────────────────── */
 .card-footer {
@@ -620,12 +622,12 @@ a:hover { text-decoration: underline; }
         <!-- Widoczność profilu -->
         <div class="form-section">
             <div class="section-label">Widoczność profilu</div>
-            <div class="privacy-group">
+            <div class="privay-group">
                 <?php
                 $privacyOptions = [
-                    'public'  => ['🌍', 'Publiczny',  'Widoczny dla wszystkich'],
-                    'custom'  => ['👥', 'Znajomi',    'Widoczny tylko dla znajomych'],
-                    'private' => ['🔒', 'Prywatny',   'Widoczny tylko dla Ciebie'],
+                    'public'  => ['<svg><use xlink:href="./icons/symbol-defs.svg#icon-home"></use></svg>', 'Publiczny',  'Widoczny dla wszystkich'],
+                    'custom'  => ['<svg><use xlink:href="./icons/symbol-defs.svg#icon-home"></use></svg>', 'Znajomi',    'Widoczny tylko dla znajomych'],
+                    'private' => ['<svg><use xlink:href="./icons/symbol-defs.svg#icon-home"></use></svg>', 'Prywatny',   'Widoczny tylko dla Ciebie'],
                 ];
                 foreach ($privacyOptions as $val => [$icon, $title, $desc]):
                     $checked = $prof['privacy_level'] === $val ? 'checked' : '';
