@@ -1,188 +1,154 @@
-const express = require('express');
-const http = require('http');
 const { Server } = require('socket.io');
 const mysql = require('mysql2/promise');
+const crypto = require('crypto');
 
-// Konfiguracja połączenia z MySQL – dane takie same jak w config/database.php
-const dbConfig = {
+const SECRET = 'bardzo_tajny_klucz_zmien_go'; // ten sam co w config/database.php
+const DB_CONFIG = {
     host: 'localhost',
     user: 'root',
     password: '',
-    database: 'twarzoblok',  // nazwa bazy – sprawdź, czy dokładnie taka
+    database: 'twarzobok',
     waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0
+    connectionLimit: 10
 };
 
-const pool = mysql.createPool(dbConfig);
+// Utworzenie puli (synchroniczne)
+const pool = mysql.createPool(DB_CONFIG);
 
-const app = express();
-const server = http.createServer(app);
-const io = new Server(server, {
-    cors: {
-        origin: "*",  // na potrzeby deweloperskie, później ogranicz do domeny
-        methods: ["GET", "POST"]
-    }
+// Opcjonalna obsługa błędów puli
+pool.on('error', (err) => {
+    console.error('Błąd puli MySQL:', err);
 });
 
-// Przechowuje informacje o zalogowanych użytkownikach w kontekście Socket.io
-const onlineUsers = new Map();  // socket.id => { userId, username, chatId }
+// Socket.io
+const io = new Server(3000, {
+    cors: { origin: "http://localhost", methods: ["GET", "POST"] }
+});
+
+const onlineUsers = new Map();           // userId -> Set<socketId>
+const userFriends = new Map();           // userId -> Set<friendId>
+
+async function loadFriends(userId) {
+    const [rows] = await pool.execute(
+        `SELECT u.user_id FROM friendships f
+                                   JOIN users u ON (f.requester_id = u.user_id OR f.addressee_id = u.user_id)
+         WHERE f.status = 'accepted'
+           AND ((f.requester_id = ? AND u.user_id = f.addressee_id)
+             OR (f.addressee_id = ? AND u.user_id = f.requester_id))
+           AND u.user_id != ?
+         GROUP BY u.user_id`,
+        [userId, userId, userId]
+    );
+    return new Set(rows.map(r => r.user_id));
+}
+
+function verifyToken(token) {
+    try {
+        const parts = token.split('.');
+        if (parts.length !== 2) {
+            console.log('🔐 Nieprawidłowy format tokena (brak kropki)');
+            return false;
+        }
+        const payloadStr = Buffer.from(parts[0], 'base64').toString('utf8');
+        const sigBuffer = Buffer.from(parts[1], 'base64');
+
+        const expectedSig = crypto.createHmac('sha256', SECRET).update(payloadStr).digest();
+        if (!crypto.timingSafeEqual(sigBuffer, expectedSig)) {
+            console.log('🔐 Niezgodność podpisu');
+            return false;
+        }
+        const data = JSON.parse(payloadStr);
+        console.log('🕒 Token ważny do:', new Date(data.exp * 1000), 'teraz:', new Date());
+        return (Date.now() / 1000 < data.exp) ? data : false;
+    } catch (e) {
+        console.error('❌ Błąd parsowania tokena:', e);
+        return false;
+    }
+}
+
+async function saveMessage(chatId, senderId, content, type) {
+    await pool.execute(
+        'INSERT INTO chat_messages (chat_id, sender_id, content, message_type) VALUES (?, ?, ?, ?)',
+        [chatId, senderId, content, type]
+    );
+}
 
 io.on('connection', async (socket) => {
-    const { userId, chatId } = socket.handshake.auth;
-    if (!userId) {
-        socket.emit('error', 'Brak identyfikatora użytkownika');
+    const user = verifyToken(socket.handshake.auth.token);
+    if (!user) {
+        socket.emit('error', 'Nieprawidłowy token');
         socket.disconnect();
         return;
     }
 
-    // Pobranie danych użytkownika z bazy
-    let user;
-    try {
-        const [rows] = await pool.query('SELECT user_id, username FROM users WHERE user_id = ?', [userId]);
-        if (rows.length === 0) {
-            socket.emit('error', 'Nieprawidłowy użytkownik');
-            socket.disconnect();
-            return;
-        }
-        user = rows[0];
-    } catch (err) {
-        console.error(err);
-        socket.disconnect();
-        return;
-    }
+    const userId = user.user_id;
+    const username = user.username;
 
-    // Jeśli podano chatId, sprawdź czy użytkownik jest uczestnikiem
-    if (chatId) {
-        try {
-            const [participant] = await pool.query(
-                'SELECT 1 FROM chat_participants WHERE chat_id = ? AND user_id = ?',
-                [chatId, userId]
-            );
-            if (participant.length === 0) {
-                socket.emit('error', 'Nie masz dostępu do tego czatu');
-                socket.disconnect();
-                return;
-            }
-            // Dołącz do pokoju Socket.io dla tego czatu
-            socket.join(`chat_${chatId}`);
-            // Zapamiętaj kontekst
-            onlineUsers.set(socket.id, { userId: user.user_id, username: user.username, chatId });
-        } catch (err) {
-            console.error(err);
-            socket.disconnect();
-            return;
+    if (!onlineUsers.has(userId)) onlineUsers.set(userId, new Set());
+    onlineUsers.get(userId).add(socket.id);
+
+    socket.join(`user:${userId}`);
+
+    if (!userFriends.has(userId)) {
+        userFriends.set(userId, await loadFriends(userId));
+    }
+    const friends = userFriends.get(userId);
+
+    // Powiadom znajomych o online
+    for (let fid of friends) {
+        io.to(`user:${fid}`).emit('user_online', { user_id: userId, username });
+    }
+    // Wyślij nowemu listę online znajomych
+    for (let fid of friends) {
+        if (onlineUsers.has(fid) && onlineUsers.get(fid).size > 0) {
+            socket.emit('user_online', { user_id: fid });
         }
     }
 
-    // Powiadom pozostałych w pokoju o wejściu użytkownika
-    if (chatId) {
-        io.to(`chat_${chatId}`).emit('user_online', {
-            userId: user.user_id,
-            username: user.username
-        });
-        // Wyślij aktualną listę online
-        emitOnlineUsers(chatId);
-    }
-
-    // Obsługa pobierania historii wiadomości
-    socket.on('load_history', async (data) => {
-        const cid = data.chatId || chatId;
-        if (!cid) return;
-        try {
-            const [messages] = await pool.query(
-                `SELECT m.message_id, m.sender_id, u.username, m.content, m.message_type, m.sent_at
-                 FROM chat_messages m
-                 JOIN users u ON m.sender_id = u.user_id
-                 WHERE m.chat_id = ? AND m.status = 'active'
-                 ORDER BY m.sent_at ASC
-                 LIMIT 50`,  // ostatnie 50 wiadomości
-                [cid]
-            );
-            socket.emit('chat_history', messages);
-        } catch (err) {
-            console.error(err);
-        }
+    socket.on('join_chat', (data) => {
+        socket.join(`chat:${data.chat_id}`);
     });
 
-    // Wysyłanie nowej wiadomości
     socket.on('send_message', async (data) => {
-        const cid = data.chatId || chatId;
-        if (!cid || !data.content) return;
+        const { chat_id, content, message_type = 'text' } = data;
+        if (!chat_id || !content.trim()) return;
 
-        const content = data.content.trim();
-        if (content === '') return;
+        const [rows] = await pool.execute(
+            'SELECT 1 FROM chat_participants WHERE chat_id = ? AND user_id = ?',
+            [chat_id, userId]
+        );
+        if (rows.length === 0) {
+            socket.emit('error', 'Nie należysz do czatu');
+            return;
+        }
 
         try {
-            // Zapis do bazy
-            const [result] = await pool.query(
-                `INSERT INTO chat_messages (chat_id, sender_id, content, message_type, sent_at)
-                 VALUES (?, ?, ?, 'text', NOW())`,
-                [cid, user.user_id, content]
-            );
-            const messageId = result.insertId;
-
-            // Pobranie znacznika czasu z bazy (dla spójności)
-            const [timestamps] = await pool.query(
-                'SELECT sent_at FROM chat_messages WHERE message_id = ?', [messageId]
-            );
-            const sentAt = timestamps[0].sent_at;
-
-            const messageData = {
-                message_id: messageId,
-                chat_id: cid,
-                sender_id: user.user_id,
-                username: user.username,
-                content: content,
-                message_type: 'text',
-                sent_at: sentAt
-            };
-
-            // Rozsyłanie do wszystkich w pokoju
-            io.to(`chat_${cid}`).emit('new_message', messageData);
+            await saveMessage(chat_id, userId, content, message_type);
+            io.to(`chat:${chat_id}`).emit('new_message', {
+                chat_id,
+                user_id: userId,
+                username,
+                content,
+                sent_at: new Date().toISOString()
+            });
         } catch (err) {
             console.error(err);
-        }
-    });
-
-    // Opuszczanie czatu (gdy użytkownik zmienia pokój)
-    socket.on('leave_chat', (cid) => {
-        if (cid) {
-            socket.leave(`chat_${cid}`);
-            // Usunięcie z mapy (jeśli był przypisany do tego czatu)
-            const info = onlineUsers.get(socket.id);
-            if (info && info.chatId == cid) {
-                onlineUsers.delete(socket.id);
-                emitOnlineUsers(cid);
-            }
+            socket.emit('error', 'Błąd wysyłania');
         }
     });
 
     socket.on('disconnect', () => {
-        const info = onlineUsers.get(socket.id);
-        if (info && info.chatId) {
-            io.to(`chat_${info.chatId}`).emit('user_offline', {
-                userId: info.userId,
-                username: info.username
-            });
-            emitOnlineUsers(info.chatId);
+        const userSockets = onlineUsers.get(userId);
+        if (userSockets) {
+            userSockets.delete(socket.id);
+            if (userSockets.size === 0) {
+                onlineUsers.delete(userId);
+                for (let fid of friends) {
+                    io.to(`user:${fid}`).emit('user_offline', { user_id: userId });
+                }
+            }
         }
-        onlineUsers.delete(socket.id);
     });
 });
 
-// Pomocnicza funkcja – wysyła listę online do konkretnego pokoju
-function emitOnlineUsers(chatId) {
-    const usersInRoom = [];
-    for (const [_, user] of onlineUsers) {
-        if (user.chatId == chatId) {
-            usersInRoom.push({ userId: user.userId, username: user.username });
-        }
-    }
-    io.to(`chat_${chatId}`).emit('online_users', usersInRoom);
-}
-
-const PORT = 3000;
-server.listen(PORT, () => {
-    console.log(`Serwer czatu działa na porcie ${PORT}`);
-});
+console.log('Serwer Socket.io działa na porcie 3000');

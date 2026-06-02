@@ -41,4 +41,6 @@ class Database {
 function db() {
     return Database::getInstance()->getConnection();
 }
+// ... na końcu Twojego config.php
+define('SOCKET_SECRET', 'bardzo_tajny_klucz_zmien_go');
 ?>
