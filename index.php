@@ -1,199 +1,148 @@
 <?php
 session_start();
+
+require_once 'config/database.php';
+
+//Jeśli niezalogowany to przekierowywuje na login.php//
 if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
     header('Location: login.php');
     exit;
 }
 
-// 1. PRZEKIEROWANIE JEŚLI UŻYTKOWNIK NIE JEST ZALOGOWANY
-if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
-    header("Location: login.php");
-    exit;
-}
+$current_user_id = (int) $_SESSION['user_id'];
 
-// 2. POŁĄCZENIE Z BAZĄ DANYCH
-$host = '127.0.0.1';
-$db   = 'twarzobok';
-$user = 'root';
-$pass = '';
-$charset = 'utf8mb4';
+//Dodawanie postów//
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
-$dsn = "mysql:host=$host;dbname=$db;charset=$charset";
-$options = [
-        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        PDO::ATTR_EMULATE_PREPARES   => false,
-];
+    // --- DODAWANIE NOWEGO POSTA ---
+    if (isset($_POST['submit_post'])) {
+        $upload_dir = 'uploads/posts/';
+        if (!is_dir($upload_dir)) {
+            mkdir($upload_dir, 0777, true);
+        }
 
-try {
-    $pdo = new PDO($dsn, $user, $pass, $options);
-} catch (\PDOException $e) {
-    die("Błąd połączenia z bazą danych: " . $e->getMessage());
-}
+        $content = trim($_POST['content'] ?? '');
+        $media_links = null;
+        $has_content = !empty($content);
+        $has_file = isset($_FILES['post_media']) && $_FILES['post_media']['error'] === UPLOAD_ERR_OK;
 
-// 3. LOGIKA DODAWANIA POSTA
-$upload_dir = 'uploads/posts/';
-if (!is_dir($upload_dir)) {
-    mkdir($upload_dir, 0777, true);
-}
+        if ($has_content || $has_file) {
+            $media_array = [];
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_post'])) {
-    $author_id = $_SESSION['user_id'];
-    $content = trim($_POST['content'] ?? '');
-    $media_links = null;
+            if ($has_file) {
+                $file_tmp = $_FILES['post_media']['tmp_name'];
+                $file_name = time() . '_' . basename($_FILES['post_media']['name']);
+                $file_path = $upload_dir . $file_name;
 
-    $has_content = !empty($content);
-    $has_file = isset($_FILES['post_media']) && $_FILES['post_media']['error'] === UPLOAD_ERR_OK;
-
-    if ($has_content || $has_file) {
-        $media_array = [];
-
-        if ($has_file) {
-            $file_tmp = $_FILES['post_media']['tmp_name'];
-            $file_name = time() . '_' . basename($_FILES['post_media']['name']);
-            $file_path = $upload_dir . $file_name;
-
-            $check = getimagesize($file_tmp);
-            if ($check !== false) {
-                if (move_uploaded_file($file_tmp, $file_path)) {
-                    $media_array[] = $file_path;
+                if (getimagesize($file_tmp) !== false) {
+                    if (move_uploaded_file($file_tmp, $file_path)) {
+                        $media_array[] = $file_path;
+                    }
                 }
             }
+
+            if (!empty($media_array)) {
+                $media_links = json_encode($media_array);
+            }
+
+            $stmt = db()->prepare("INSERT INTO posts (author_id, content, media_links, created_at) VALUES (:author_id, :content, :media_links, NOW())");
+            $stmt->execute([
+                    ':author_id'   => $current_user_id,
+                    ':content'     => $content,
+                    ':media_links' => $media_links
+            ]);
+
+            header("Location: " . $_SERVER['PHP_SELF']);
+            exit;
         }
-
-        if (!empty($media_array)) {
-            $media_links = json_encode($media_array);
-        }
-
-        $stmt = $pdo->prepare("INSERT INTO posts (author_id, content, media_links, created_at) VALUES (:author_id, :content, :media_links, NOW())");
-        $stmt->execute([
-                ':author_id' => $author_id,
-                ':content' => $content,
-                ':media_links' => $media_links
-        ]);
-
-        header("Location: " . $_SERVER['PHP_SELF']);
-        exit;
-    }
-}
-
-// ============================================================
-// 4. OBSŁUGA AJAX – DODAWANIE ZNAJOMEGO, USUWANIE PROPOZYCJI, LICZNIK
-// ============================================================
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
-    header('Content-Type: application/json');
-
-    if (!isset($_SESSION['user_id'])) {
-        echo json_encode(['success' => false, 'message' => 'Nie jesteś zalogowany.']);
-        exit;
     }
 
-    $current_user_id = (int) $_SESSION['user_id'];
-    $action = $_POST['action'];
+    // --- OBSŁUGA AJAX ---
+    if (isset($_POST['action'])) {
+        header('Content-Type: application/json');
 
-    // --- DODAJ ZNAJOMEGO ---
-    if ($action === 'add_friend') {
-        $target_id = isset($_POST['target_user_id']) ? (int) $_POST['target_user_id'] : 0;
-
-        if ($target_id <= 0 || $target_id === $current_user_id) {
-            echo json_encode(['success' => false, 'message' => 'Nieprawidłowy użytkownik.']);
+        if (!isset($_SESSION['user_id'])) {
+            echo json_encode(['success' => false, 'message' => 'Nie jesteś zalogowany.']);
             exit;
         }
 
-        try {
-            // Sprawdź, czy relacja już istnieje – użyj unikalnych parametrów
-            $check = $pdo->prepare("
-            SELECT friendship_id, status FROM friendships 
-            WHERE (requester_id = :u1 AND addressee_id = :u2)
-               OR (requester_id = :u3 AND addressee_id = :u4)
-        ");
-            $check->execute([
-                    ':u1' => $current_user_id,
-                    ':u2' => $target_id,
-                    ':u3' => $target_id,
-                    ':u4' => $current_user_id
-            ]);
-            $existing = $check->fetch();
+        $action = $_POST['action'];
 
-            if ($existing) {
-                echo json_encode(['success' => false, 'message' => 'Zaproszenie już istnieje lub jesteście znajomymi.']);
+        // AJAX: Dodaj znajomego
+        if ($action === 'add_friend') {
+            $target_id = isset($_POST['target_user_id']) ? (int) $_POST['target_user_id'] : 0;
+
+            if ($target_id <= 0 || $target_id === $current_user_id) {
+                echo json_encode(['success' => false, 'message' => 'Nieprawidłowy użytkownik.']);
                 exit;
             }
 
-            // Wstaw nowe zaproszenie – BEZ created_at, jeśli kolumna nie istnieje
-            $insert = $pdo->prepare("
-            INSERT INTO friendships (requester_id, addressee_id, status) 
-            VALUES (:requester, :addressee, 'pending')
-        ");
-            $insert->execute([':requester' => $current_user_id, ':addressee' => $target_id]);
+            try {
+                $check = db()->prepare("
+                    SELECT friendship_id, status FROM friendships 
+                    WHERE (requester_id = :u1 AND addressee_id = :u2)
+                       OR (requester_id = :u3 AND addressee_id = :u4)
+                ");
+                $check->execute([
+                        ':u1' => $current_user_id, ':u2' => $target_id,
+                        ':u3' => $target_id,       ':u4' => $current_user_id
+                ]);
 
-            echo json_encode(['success' => true, 'message' => 'Zaproszenie wysłane!']);
-        } catch (PDOException $e) {
-            echo json_encode(['success' => false, 'message' => 'Błąd bazy danych: ' . $e->getMessage()]);
-        }
-        exit;
-    }
+                if ($check->fetch()) {
+                    echo json_encode(['success' => false, 'message' => 'Zaproszenie już istnieje lub jesteście znajomymi.']);
+                    exit;
+                }
 
-    // --- USUŃ PROPOZYCJĘ (ZAPAMIĘTAJ W CIASTECZKU) ---
-    if ($action === 'remove_suggestion') {
-        $target_id = isset($_POST['target_user_id']) ? (int) $_POST['target_user_id'] : 0;
+                $insert = db()->prepare("INSERT INTO friendships (requester_id, addressee_id, status) VALUES (:requester, :addressee, 'pending')");
+                $insert->execute([':requester' => $current_user_id, ':addressee' => $target_id]);
 
-        if ($target_id <= 0) {
-            echo json_encode(['success' => false, 'message' => 'Nieprawidłowy użytkownik.']);
+                echo json_encode(['success' => true, 'message' => 'Zaproszenie wysłane!']);
+            } catch (PDOException $e) {
+                echo json_encode(['success' => false, 'message' => 'Błąd bazy danych: ' . $e->getMessage()]);
+            }
             exit;
         }
 
-        $cookie_name = 'removed_suggestions';
-        $removed_ids = [];
+        // AJAX: Usuń propozycję z karuzeli (Ciasteczko)
+        if ($action === 'remove_suggestion') {
+            $target_id = isset($_POST['target_user_id']) ? (int) $_POST['target_user_id'] : 0;
 
-        if (isset($_COOKIE[$cookie_name])) {
-            $removed_ids = json_decode($_COOKIE[$cookie_name], true);
-            if (!is_array($removed_ids)) {
-                $removed_ids = [];
+            if ($target_id <= 0) {
+                echo json_encode(['success' => false, 'message' => 'Nieprawidłowy użytkownik.']);
+                exit;
             }
+
+            $cookie_name = 'removed_suggestions';
+            $removed_ids = isset($_COOKIE[$cookie_name]) ? json_decode($_COOKIE[$cookie_name], true) : [];
+            if (!is_array($removed_ids)) $removed_ids = [];
+
+            if (!in_array($target_id, $removed_ids)) {
+                $removed_ids[] = $target_id;
+            }
+
+            setcookie($cookie_name, json_encode($removed_ids), time() + (30 * 24 * 60 * 60), '/');
+            echo json_encode(['success' => true, 'message' => 'Propozycja usunięta.']);
+            exit;
         }
 
-        if (!in_array($target_id, $removed_ids)) {
-            $removed_ids[] = $target_id;
+        // AJAX: Pobierz licznik oczekujących zaproszeń
+        if ($action === 'get_pending_count') {
+            $stmt = db()->prepare("SELECT COUNT(*) AS cnt FROM friendships WHERE addressee_id = :uid AND status = 'pending'");
+            $stmt->execute([':uid' => $current_user_id]);
+            echo json_encode(['success' => true, 'count' => (int) $stmt->fetchColumn()]);
+            exit;
         }
 
-        setcookie($cookie_name, json_encode($removed_ids), time() + (30 * 24 * 60 * 60), '/');
-
-        echo json_encode(['success' => true, 'message' => 'Propozycja usunięta.']);
+        echo json_encode(['success' => false, 'message' => 'Nieznana akcja.']);
         exit;
     }
-
-    // --- LICZNIK OCZEKUJĄCYCH ZAPROSZEŃ ---
-    if ($action === 'get_pending_count') {
-        $stmt = $pdo->prepare("
-            SELECT COUNT(*) AS cnt 
-            FROM friendships 
-            WHERE addressee_id = :uid AND status = 'pending'
-        ");
-        $stmt->execute([':uid' => $current_user_id]);
-        $count = (int) $stmt->fetchColumn();
-
-        echo json_encode(['success' => true, 'count' => $count]);
-        exit;
-    }
-
-    echo json_encode(['success' => false, 'message' => 'Nieznana akcja.']);
-    exit;
 }
 
-// ============================================================
-// 5. POBIERANIE PROPOZYCJI ZNAJOMYCH DO KARUZELI
-// ============================================================
-$current_user_id = (int) $_SESSION['user_id'];
-
-// Odczytaj usunięte ID z ciasteczka
-$removed_ids = [];
-if (isset($_COOKIE['removed_suggestions'])) {
-    $removed_ids = json_decode($_COOKIE['removed_suggestions'], true);
-    if (!is_array($removed_ids)) {
-        $removed_ids = [];
-    }
-}
+// ==========================================
+// 4. POBIERANIE DANYCH DO WYŚWIETLENIA
+// ==========================================
+$removed_ids = isset($_COOKIE['removed_suggestions']) ? json_decode($_COOKIE['removed_suggestions'], true) : [];
+if (!is_array($removed_ids)) $removed_ids = [];
 $removed_ids = array_map('intval', $removed_ids);
 
 $sql = "
@@ -202,16 +151,15 @@ $sql = "
     FROM users u
     LEFT JOIN addresses addr ON u.user_id = addr.user_id
     WHERE u.user_id != :current_user
-";
-
-$sql .= " AND u.user_id NOT IN (
+    AND u.user_id NOT IN (
         SELECT CASE 
             WHEN requester_id = :current_user2 THEN addressee_id 
             WHEN addressee_id = :current_user3 THEN requester_id 
         END
         FROM friendships
         WHERE (requester_id = :current_user4 OR addressee_id = :current_user5)
-    )";
+    )
+";
 
 if (!empty($removed_ids)) {
     $placeholders = [];
@@ -220,11 +168,9 @@ if (!empty($removed_ids)) {
     }
     $sql .= " AND u.user_id NOT IN (" . implode(',', $placeholders) . ")";
 }
-
 $sql .= " GROUP BY u.user_id ORDER BY RAND() LIMIT 12";
 
-$stmt = $pdo->prepare($sql);
-
+$stmt = db()->prepare($sql);
 $params = [
         ':current_user'  => $current_user_id,
         ':current_user2' => $current_user_id,
@@ -235,31 +181,25 @@ $params = [
 foreach ($removed_ids as $i => $id) {
     $params[':removed_' . $i] = $id;
 }
-
 $stmt->execute($params);
 $suggestions = $stmt->fetchAll();
 
-// Pobierz początkową liczbę oczekujących zaproszeń (do wyświetlenia w navbarze)
-$pending_sql = "SELECT COUNT(*) FROM friendships WHERE addressee_id = :uid AND status = 'pending'";
-$pending_stmt = $pdo->prepare($pending_sql);
+// Pobierz początkowy stan licznika dla Navbaru
+$pending_stmt = db()->prepare("SELECT COUNT(*) FROM friendships WHERE addressee_id = :uid AND status = 'pending'");
 $pending_stmt->execute([':uid' => $current_user_id]);
 $pending_count = (int) $pending_stmt->fetchColumn();
 ?>
-
 <!doctype html>
-<html lang="en">
+<html lang="pl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title>TwarzBlok - Feed</title>
     <link rel="stylesheet" href="css/style.css">
 
     <style>
-        svg {
-            max-width: 24px;
-            max-height: 24px;
-        }
+        svg { max-width: 24px; max-height: 24px; }
 
         .navbar {
             display: flex;
@@ -268,9 +208,7 @@ $pending_count = (int) $pending_stmt->fetchColumn();
             padding: 0 15px;
             box-sizing: border-box;
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
+            top: 0; left: 0; width: 100%;
             z-index: 1000;
         }
 
@@ -291,250 +229,78 @@ $pending_count = (int) $pending_stmt->fetchColumn();
             top: 80px;
         }
 
-        .feed {
-            flex-grow: 1;
-            max-width: 600px;
-            margin: 0 auto;
-        }
+        .feed { flex-grow: 1; max-width: 600px; margin: 0 auto; }
 
-        #image-preview-container {
-            position: relative;
-            margin-top: 15px;
-            border-radius: 8px;
-            overflow: hidden;
-            display: none;
-            background-color: var(--bg-hover, #f0f2f5);
-        }
-        #image-preview {
-            width: 100%;
-            max-height: 300px;
-            object-fit: contain;
-            display: block;
-        }
-        .remove-preview-btn {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            background-color: rgba(255, 255, 255, 0.8);
-            border: none;
-            border-radius: 50%;
-            width: 30px;
-            height: 30px;
-            font-size: 16px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-        }
-
-        /* ============== STYLE KARUZELI PROPOZYCJI ZNAJOMYCH ============== */
-        .suggestions-section {
-            margin-bottom: 20px;
-        }
-
-        .suggestions-section h4 {
-            font-size: 16px;
-            font-weight: 600;
-            color: var(--text-main, #1c1e21);
-            margin-bottom: 12px;
-            padding: 0 4px;
-        }
-
-        .suggestions-carousel-wrapper {
-            position: relative;
-            display: flex;
-            align-items: center;
-            overflow: visible;
-        }
-
-        .suggestions-carousel {
-            display: flex;
-            gap: 12px;
-            overflow-x: auto;
-            scroll-behavior: smooth;
-            scroll-snap-type: x mandatory;
-            -webkit-overflow-scrolling: touch;
-            padding: 4px 2px 8px 2px;
-            scrollbar-width: thin;
-            scrollbar-color: var(--border-color, #ccc) transparent;
-        }
-
-        .suggestions-carousel::-webkit-scrollbar {
-            height: 6px;
-        }
-        .suggestions-carousel::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        .suggestions-carousel::-webkit-scrollbar-thumb {
-            background-color: var(--border-color, #ccc);
+        .post-form-card {
+            background-color: var(--bg-surface);
             border-radius: 10px;
-        }
-
-        .suggestion-card {
-            flex: 0 0 auto;
-            width: 180px;
-            background-color: var(--bg-surface, #fff);
-            border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            padding: 16px 12px;
-            text-align: center;
-            scroll-snap-align: start;
-            transition: transform 0.2s, box-shadow 0.2s;
-            position: relative;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .suggestion-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
-
-        .suggestion-card .suggestion-avatar {
-            width: 72px;
-            height: 72px;
-            border-radius: 50%;
-            overflow: hidden;
-            flex-shrink: 0;
-            background-color: var(--border-color, #e0e0e0);
-        }
-
-        .suggestion-card .suggestion-avatar img {
+            padding: 12px 16px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
             width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: block;
+            margin-bottom: 15px;
         }
+        .post-create-top { display: flex; gap: 8px; padding-bottom: 12px; }
+        .post-create-top .avatar-wrapper { width: 40px; height: 40px; flex-shrink: 0; }
+        .post-create-top .avatar-wrapper img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: var(--radius-round); }
+        .post-create-top .avatar-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background-color: var(--border-color); border-radius: var(--radius-round); }
+        .post-create-top .avatar-placeholder svg { width: 20px; height: 20px; fill: var(--text-muted); }
+        .post-create-top .form-input { flex-grow: 1; height: 40px; padding: 0 16px; border: 1px solid var(--border-color); border-radius: 20px; background-color: var(--bg-main); outline: none; }
 
-        .suggestion-card .suggestion-avatar .avatar-placeholder {
-            width: 100%;
-            height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background-color: var(--border-color, #e0e0e0);
-        }
+        .post-create-bottom { display: flex; justify-content: space-between; align-items: center; padding-top: 10px; flex-wrap: wrap; gap: 10px; }
+        .post-create-actions { display: flex; gap: 15px; }
+        .post-create-actions label, .post-create-actions .action-item { display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 14px; font-weight: 600; cursor: pointer; padding: 6px 8px; border-radius: 6px; background: transparent; transition: background 0.2s; }
+        .post-create-actions label:hover, .post-create-actions .action-item:hover { background-color: var(--bg-hover); }
+        .post-create-actions svg { width: 18px; height: 18px; display: inline-block; }
+        .btn-submit-post { border: none; background-color: var(--primary-color); color: white; padding: 6px 20px; font-weight: 600; border-radius: 20px; cursor: pointer; transition: background 0.2s; }
+        .btn-submit-post:hover { background-color: var(--primary-hover); }
 
-        .suggestion-card .suggestion-avatar .avatar-placeholder svg {
-            width: 36px;
-            height: 36px;
-            fill: var(--text-muted, #888);
-        }
+        #image-preview-container { position: relative; margin-top: 15px; border-radius: 8px; overflow: hidden; display: none; background-color: var(--bg-hover, #f0f2f5); }
+        #image-preview { width: 100%; max-height: 300px; object-fit: contain; display: block; }
+        .remove-preview-btn { position: absolute; top: 10px; right: 10px; background-color: rgba(255, 255, 255, 0.8); border: none; border-radius: 50%; width: 30px; height: 30px; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
 
-        .suggestion-card .suggestion-name {
-            font-weight: 600;
-            font-size: 14px;
-            color: var(--text-main, #1c1e21);
-            line-height: 1.3;
-            max-width: 100%;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
+        .friend-badge { position: absolute; top: -8px; right: -10px; background: #e63946; color: white; border-radius: 50%; min-width: 20px; height: 20px; font-size: 12px; font-weight: bold; display: flex; align-items: center; justify-content: center; padding: 0 4px; box-shadow: 0 0 0 2px var(--bg-main, #fff); }
 
-        .suggestion-card .suggestion-location {
-            font-size: 12px;
-            color: var(--text-muted, #65676b);
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            justify-content: center;
-        }
+        .post-feed-card { background-color: var(--bg-surface); border-radius: 10px; padding: 15px; margin-bottom: 15px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .post-feed-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+        .post-feed-header .avatar-box { width: 40px; height: 40px; border-radius: 50%; overflow: hidden; }
+        .post-feed-header .avatar-box img { width:100%; height:100%; object-fit:cover; }
+        .post-feed-header .avatar-box .placeholder-svg { width:100%; height:100%; background-color:var(--border-color); display:flex; align-items:center; justify-content:center; }
+        .post-feed-header .avatar-box svg { width:20px; height:20px; fill:var(--text-muted); }
+        .post-feed-author { font-weight: 600; font-size: 15px; color: var(--text-main); }
+        .post-feed-time { font-size: 12px; color: var(--text-muted); }
+        .post-feed-content { font-size: 15px; color: var(--text-main); margin-bottom: 10px; }
+        .post-feed-media { margin-top: 10px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color, #eee); }
+        .post-feed-media img { width: 100%; display: block; max-height: 600px; object-fit: contain; background-color: var(--bg-hover, #f0f2f5); }
 
-        .suggestion-card .suggestion-actions {
-            display: flex;
-            gap: 8px;
-            width: 100%;
-            margin-top: 4px;
-        }
+        .suggestions-section { margin-bottom: 20px; background-color: var(--bg-surface); border-radius: 10px; padding: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); margin-bottom: 15px; }
+        .suggestions-section h4 { font-size: 16px; font-weight: 600; color: var(--text-main, #1c1e21); margin-bottom: 12px; padding: 0 4px; }
+        .suggestions-carousel-wrapper { position: relative; display: flex; align-items: center; overflow: visible; }
+        .suggestions-carousel { display: flex; gap: 12px; overflow-x: auto; scroll-behavior: smooth; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; padding: 4px 2px 8px 2px; scrollbar-width: thin; scrollbar-color: var(--border-color, #ccc) transparent; }
+        .suggestions-carousel::-webkit-scrollbar { height: 6px; }
+        .suggestions-carousel::-webkit-scrollbar-track { background: transparent; }
+        .suggestions-carousel::-webkit-scrollbar-thumb { background-color: var(--border-color, #ccc); border-radius: 10px; }
 
-        .suggestion-card .btn-add-friend {
-            flex: 1;
-            padding: 7px 10px;
-            font-size: 13px;
-            font-weight: 600;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            background-color: var(--primary-color, #1877f2);
-            color: #fff;
-            transition: background-color 0.2s;
-        }
+        .suggestion-card { flex: 0 0 auto; width: 180px; background-color: var(--bg-surface, #fff); border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 16px 12px; text-align: center; scroll-snap-align: start; transition: transform 0.2s, box-shadow 0.2s; position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+        .suggestion-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        .suggestion-card .suggestion-avatar { width: 72px; height: 72px; border-radius: 50%; overflow: hidden; flex-shrink: 0; background-color: var(--border-color, #e0e0e0); }
+        .suggestion-card .suggestion-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .suggestion-card .suggestion-avatar .avatar-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background-color: var(--border-color, #e0e0e0); }
+        .suggestion-card .suggestion-avatar .avatar-placeholder svg { width: 36px; height: 36px; fill: var(--text-muted, #888); }
+        .suggestion-card .suggestion-name { font-weight: 600; font-size: 14px; color: var(--text-main, #1c1e21); line-height: 1.3; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .suggestion-card .suggestion-location { font-size: 12px; color: var(--text-muted, #65676b); display: flex; align-items: center; gap: 4px; justify-content: center; }
+        .suggestion-card .suggestion-actions { display: flex; gap: 8px; width: 100%; margin-top: 4px; }
+        .suggestion-card .btn-add-friend { flex: 1; padding: 7px 10px; font-size: 13px; font-weight: 600; border: none; border-radius: 6px; cursor: pointer; background-color: var(--primary-color, #1877f2); color: #fff; transition: background-color 0.2s; }
+        .suggestion-card .btn-add-friend:hover { background-color: var(--primary-hover, #166fe5); }
+        .suggestion-card .btn-add-friend:disabled { background-color: #42b72a; cursor: default; }
+        .suggestion-card .btn-remove-suggestion { padding: 7px 10px; font-size: 13px; font-weight: 600; border: 1px solid var(--border-color, #ddd); border-radius: 6px; cursor: pointer; background-color: transparent; color: var(--text-muted, #65676b); transition: background-color 0.2s, color 0.2s; white-space: nowrap; }
+        .suggestion-card .btn-remove-suggestion:hover { background-color: var(--bg-hover, #f0f2f5); color: var(--text-main, #1c1e21); }
 
-        .suggestion-card .btn-add-friend:hover {
-            background-color: var(--primary-hover, #166fe5);
-        }
-
-        .suggestion-card .btn-add-friend:disabled {
-            background-color: #42b72a;
-            cursor: default;
-        }
-
-        .suggestion-card .btn-remove-suggestion {
-            padding: 7px 10px;
-            font-size: 13px;
-            font-weight: 600;
-            border: 1px solid var(--border-color, #ddd);
-            border-radius: 6px;
-            cursor: pointer;
-            background-color: transparent;
-            color: var(--text-muted, #65676b);
-            transition: background-color 0.2s, color 0.2s;
-            white-space: nowrap;
-        }
-
-        .suggestion-card .btn-remove-suggestion:hover {
-            background-color: var(--bg-hover, #f0f2f5);
-            color: var(--text-main, #1c1e21);
-        }
-
-        /* Poprawione strzałki – widoczne */
-        .carousel-arrow {
-            position: absolute;
-            top: 50%;
-            transform: translateY(-50%);
-            z-index: 10;
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            border: 1px solid var(--border-color, #ddd);
-            background: rgba(255, 255, 255, 0.95);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-            transition: background-color 0.2s, box-shadow 0.2s;
-        }
-
-        .carousel-arrow:hover {
-            background: #ffffff;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.25);
-        }
-
-        .carousel-arrow-left {
-            left: -12px;
-        }
-
-        .carousel-arrow-right {
-            right: -12px;
-        }
-
-        .carousel-arrow svg {
-            width: 18px;
-            height: 18px;
-            fill: var(--text-main, #1c1e21);
-        }
-
-        .suggestions-empty {
-            text-align: center;
-            padding: 20px;
-            color: var(--text-muted, #888);
-            font-size: 14px;
-        }
+        .carousel-arrow { position: absolute; top: 50%; transform: translateY(-50%); z-index: 10; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border-color, #ddd); background: rgba(255, 255, 255, 0.95); cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,0.2); transition: background-color 0.2s, box-shadow 0.2s; }
+        .carousel-arrow:hover { background: #ffffff; box-shadow: 0 4px 12px rgba(0,0,0,0.25); }
+        .carousel-arrow-left { left: -12px; }
+        .carousel-arrow-right { right: -12px; }
+        .carousel-arrow svg { width: 18px; height: 18px; fill: var(--text-main, #1c1e21); }
+        .suggestions-empty { text-align: center; padding: 20px; color: var(--text-muted, #888); font-size: 14px; }
     </style>
 </head>
 <body>
@@ -548,34 +314,15 @@ $pending_count = (int) $pending_stmt->fetchColumn();
         <a href="index.php"><svg><use xlink:href="./icons/symbol-defs.svg#icon-home"></use></svg></a>
         <a href="games.php"><svg><use xlink:href="./icons/symbol-defs.svg#icon-film"></use></svg></a>
 
-        <!-- Ikona znajomych z kropką powiadomień -->
         <a href="friend_requests.php" class="friend-requests-link" style="position: relative; display: inline-flex; align-items: center;">
             <svg><use xlink:href="./icons/symbol-defs.svg#icon-users"></use></svg>
-            <span id="pending-friends-count"
-                  style="
-                          position: absolute;
-                          top: -8px;
-                          right: -10px;
-                          background: #e63946;
-                          color: white;
-                          border-radius: 50%;
-                          min-width: 20px;
-                          height: 20px;
-                          font-size: 12px;
-                          font-weight: bold;
-                          display: flex;
-                          align-items: center;
-                          justify-content: center;
-                          padding: 0 4px;
-                          box-shadow: 0 0 0 2px var(--bg-main, #fff);
-                  <?php echo ($pending_count === 0) ? 'display: none;' : ''; ?>
-                          ">
-                  <?php echo $pending_count; ?>
+            <span id="pending-friends-count" class="friend-badge" style="<?php echo ($pending_count === 0) ? 'display: none;' : ''; ?>">
+                <?php echo $pending_count; ?>
             </span>
         </a>
 
         <a href="#"><svg><use xlink:href="./icons/symbol-defs.svg#icon-briefcase"></use></svg></a>
-        <a href="messages.php"><svg><use xlink:href="./icons/symbol-defs.svg#icon-bubbles4"></use></svg></a>
+        <a href="chat.php"><svg><use xlink:href="./icons/symbol-defs.svg#icon-bubbles4"></use></svg></a>
     </div>
 
     <div class="navbar-links2">
@@ -620,31 +367,26 @@ $pending_count = (int) $pending_stmt->fetchColumn();
             <li><div class="icon-wrapper"><svg><use xlink:href="./icons/symbol-defs.svg#icon-users"></use></svg></div><a href="#">Znajomi</a></li>
             <li><div class="icon-wrapper"><svg><use xlink:href="./icons/symbol-defs.svg#icon-star-empty"></use></svg></div><a href="#">Grupy</a></li>
             <li><div class="icon-wrapper"><svg><use xlink:href="./icons/symbol-defs.svg#icon-bubbles4"></use></svg></div><a href="games.php">Mini Gry</a></li>
-            <li><div class="icon-wrapper"><svg><use xlink:href="./icons/symbol-defs.svg#icon-briefcase"></use></svg></div><a href="messages.php">Wiadomości (Czat)</a></li>
+            <li><div class="icon-wrapper"><svg><use xlink:href="./icons/symbol-defs.svg#icon-briefcase"></use></svg></div><a href="chat.php">Wiadomości (Czat)</a></li>
         </ul>
     </aside>
 
     <main class="feed">
 
-        <!-- FORMULARZ TWORZENIA POSTA -->
-        <div class="card">
-            <form method="POST" action="" enctype="multipart/form-data" class="post-create-container" style="background-color: var(--bg-surface); border-radius: 10px; padding: 12px 16px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1); width: 100%; margin-bottom: 15px;">
-
-                <div class="post-create-top" style="display: flex; gap: 8px; padding-bottom: 12px;">
-                    <div class="avatar-navbar-wrapper" style="width: 40px; height: 40px; flex-shrink: 0;">
+        <div class="post-form-card">
+            <form method="POST" action="" enctype="multipart/form-data">
+                <div class="post-create-top">
+                    <div class="avatar-wrapper">
                         <?php if (!empty($_SESSION['avatar_url'])): ?>
-                            <img src="<?php echo htmlspecialchars($_SESSION['avatar_url']); ?>" alt="Twój profil" style="width: 100%; height: 100%; object-fit: cover; display: block; border-radius: var(--radius-round);">
+                            <img src="<?php echo htmlspecialchars($_SESSION['avatar_url']); ?>" alt="Twój profil">
                         <?php else: ?>
-                            <div class="avatar" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background-color: var(--border-color); border-radius: var(--radius-round);">
-                                <svg style="width: 20px; height: 20px; fill: var(--text-muted);"><use xlink:href="./icons/symbol-defs.svg#icon-user"></use></svg>
+                            <div class="avatar-placeholder">
+                                <svg><use xlink:href="./icons/symbol-defs.svg#icon-user"></use></svg>
                             </div>
                         <?php endif; ?>
                     </div>
-
-                    <?php
-                    $placeholder_text = !empty($_SESSION['first_name']) ? "O czym teraz myślisz, " . htmlspecialchars($_SESSION['first_name']) . "?" : "O czym teraz myślisz?";
-                    ?>
-                    <input type="text" name="content" class="form-input" placeholder="<?php echo $placeholder_text; ?>" style="flex-grow: 1; height: 40px; padding: 0 16px; border: 1px solid var(--border-color); border-radius: 20px; background-color: var(--bg-main); outline: none;">
+                    <?php $placeholder_text = !empty($_SESSION['first_name']) ? "O czym teraz myślisz, " . htmlspecialchars($_SESSION['first_name']) . "?" : "O czym teraz myślisz?"; ?>
+                    <input type="text" name="content" class="form-input" placeholder="<?php echo $placeholder_text; ?>">
                 </div>
 
                 <div id="image-preview-container">
@@ -652,35 +394,25 @@ $pending_count = (int) $pending_stmt->fetchColumn();
                     <img id="image-preview" src="#" alt="Podgląd">
                 </div>
 
-                <div class="post-create-bottom" style="display: flex; justify-content: space-between; align-items: center; padding-top: 10px; flex-wrap: wrap; gap: 10px;">
-                    <div class="post-create-actions" style="display: flex; gap: 15px;">
+                <div class="post-create-bottom">
+                    <div class="post-create-actions">
                         <input type="file" name="post_media" id="post-media-upload" accept="image/*" style="display: none;" onchange="previewImage(event)">
-                        <label for="post-media-upload" class="action-item" style="display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 14px; font-weight: 600; cursor: pointer; padding: 6px 8px; border-radius: 6px; background: transparent;" onmouseover="this.style.backgroundColor='var(--bg-hover)'" onmouseout="this.style.backgroundColor='transparent'">
-                            <svg style="width: 18px; height: 18px; fill: var(--primary-color); display: inline-block;">
-                                <use xlink:href="./icons/symbol-defs.svg#icon-film"></use>
-                            </svg>
+                        <label for="post-media-upload">
+                            <svg style="fill: var(--primary-color);"><use xlink:href="./icons/symbol-defs.svg#icon-film"></use></svg>
                             Dodaj zdjęcie/film
                         </label>
-                        <div class="action-item" style="display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 14px; font-weight: 600; cursor: pointer; padding: 6px 8px; border-radius: 6px; background: transparent;" onmouseover="this.style.backgroundColor='var(--bg-hover)'" onmouseout="this.style.backgroundColor='transparent'">
-                            <svg style="width: 18px; height: 18px; fill: #2e7d32; display: inline-block;">
-                                <use xlink:href="./icons/symbol-defs.svg#icon-users"></use>
-                            </svg>
+                        <div class="action-item">
+                            <svg style="fill: #2e7d32;"><use xlink:href="./icons/symbol-defs.svg#icon-users"></use></svg>
                             Oznacz osoby
                         </div>
                     </div>
-                    <button type="submit" name="submit_post" class="btn btn-primary" style="border: none; background-color: var(--primary-color); color: white; padding: 6px 20px; font-weight: 600; border-radius: 20px; cursor: pointer;" onmouseover="this.style.backgroundColor='var(--primary-hover)'" onmouseout="this.style.backgroundColor='var(--primary-color)'">
-                        Opublikuj
-                    </button>
+                    <button type="submit" name="submit_post" class="btn-submit-post">Opublikuj</button>
                 </div>
             </form>
         </div>
 
-        <!-- ============================================= -->
-        <!-- KARUZELA PROPOZYCJI ZNAJOMYCH (zastępuje Reels) -->
-        <!-- ============================================= -->
-        <div class="suggestions-section card" style="background-color: var(--bg-surface); border-radius: 10px; padding: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); margin-bottom: 15px;">
+        <div class="suggestions-section">
             <h4>Propozycje znajomych</h4>
-
             <?php if (!empty($suggestions)): ?>
                 <div class="suggestions-carousel-wrapper">
                     <button class="carousel-arrow carousel-arrow-left" onclick="scrollCarousel(-1)" aria-label="Przewiń w lewo" title="Poprzednie">
@@ -704,21 +436,14 @@ $pending_count = (int) $pending_stmt->fetchColumn();
                                         </div>
                                     <?php endif; ?>
                                 </div>
-
                                 <div class="suggestion-name" title="<?php echo $s_name; ?>"><?php echo $s_name; ?></div>
-
                                 <div class="suggestion-location">
                                     <svg style="width:12px;height:12px;fill:currentColor;" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
                                     <?php echo $s_location; ?>
                                 </div>
-
                                 <div class="suggestion-actions">
-                                    <button class="btn-add-friend" onclick="addFriend(<?php echo $s_user_id; ?>, this)" title="Wyślij zaproszenie do znajomości">
-                                        Dodaj
-                                    </button>
-                                    <button class="btn-remove-suggestion" onclick="removeSuggestion(<?php echo $s_user_id; ?>, this)" title="Usuń propozycję">
-                                        Usuń
-                                    </button>
+                                    <button class="btn-add-friend" onclick="addFriend(<?php echo $s_user_id; ?>, this)" title="Wyślij zaproszenie do znajomości">Dodaj</button>
+                                    <button class="btn-remove-suggestion" onclick="removeSuggestion(<?php echo $s_user_id; ?>, this)" title="Usuń propozycję">Usuń</button>
                                 </div>
                             </div>
                         <?php endforeach; ?>
@@ -729,21 +454,12 @@ $pending_count = (int) $pending_stmt->fetchColumn();
                     </button>
                 </div>
             <?php else: ?>
-                <div class="suggestions-empty">
-                    Brak nowych propozycji znajomych. Zaproś znajomych do serwisu!
-                </div>
+                <div class="suggestions-empty">Brak nowych propozycji znajomych. Zaproś znajomych do serwisu!</div>
             <?php endif; ?>
         </div>
 
-        <!-- POSTY -->
         <?php
-        $stmt = $pdo->prepare("
-            SELECT p.post_id, p.content, p.media_links, p.created_at, 
-                   u.first_name, u.last_name, u.avatar_url 
-            FROM posts p
-            JOIN users u ON p.author_id = u.user_id
-            ORDER BY p.created_at DESC
-        ");
+        $stmt = db()->prepare("SELECT p.post_id, p.content, p.media_links, p.created_at, u.first_name, u.last_name, u.avatar_url FROM posts p JOIN users u ON p.author_id = u.user_id ORDER BY p.created_at DESC");
         $stmt->execute();
         $posts = $stmt->fetchAll();
 
@@ -754,33 +470,31 @@ $pending_count = (int) $pending_stmt->fetchColumn();
                 $content = htmlspecialchars($post['content']);
                 $media_links = json_decode($post['media_links'], true);
                 ?>
-                <div class="card1" style="background-color: var(--bg-surface); border-radius: 10px; padding: 15px; margin-bottom: 15px; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
-                    <div class="post-header" style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-                        <div class="avatar" style="width: 40px; height: 40px; border-radius: 50%; overflow: hidden;">
+                <div class="post-feed-card">
+                    <div class="post-feed-header">
+                        <div class="avatar-box">
                             <?php if (!empty($post['avatar_url'])): ?>
-                                <img src="<?php echo htmlspecialchars($post['avatar_url']); ?>" alt="Avatar" style="width:100%; height:100%; object-fit:cover;">
+                                <img src="<?php echo htmlspecialchars($post['avatar_url']); ?>" alt="Avatar">
                             <?php else: ?>
-                                <div style="width:100%; height:100%; background-color:var(--border-color); display:flex; align-items:center; justify-content:center;">
-                                    <svg style="width:20px; height:20px; fill:var(--text-muted);"><use xlink:href="./icons/symbol-defs.svg#icon-user"></use></svg>
+                                <div class="placeholder-svg">
+                                    <svg><use xlink:href="./icons/symbol-defs.svg#icon-user"></use></svg>
                                 </div>
                             <?php endif; ?>
                         </div>
                         <div>
-                            <div class="post-author" style="font-weight: 600; font-size: 15px; color: var(--text-main);"><?php echo $author_name; ?></div>
-                            <div class="post-time" style="font-size: 12px; color: var(--text-muted);"><?php echo $post_time; ?> • Publiczny</div>
+                            <div class="post-feed-author"><?php echo $author_name; ?></div>
+                            <div class="post-feed-time"><?php echo $post_time; ?> • Publiczny</div>
                         </div>
                     </div>
 
                     <?php if (!empty($content)): ?>
-                        <div class="post-content" style="font-size: 15px; color: var(--text-main); margin-bottom: 10px;">
-                            <?php echo nl2br($content); ?>
-                        </div>
+                        <div class="post-feed-content"><?php echo nl2br($content); ?></div>
                     <?php endif; ?>
 
                     <?php if (!empty($media_links)): ?>
-                        <div class="post-media" style="margin-top: 10px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color, #eee);">
+                        <div class="post-feed-media">
                             <?php foreach ($media_links as $media): ?>
-                                <img src="<?php echo htmlspecialchars($media); ?>" alt="Post image" style="width: 100%; display: block; max-height: 600px; object-fit: contain; background-color: var(--bg-hover, #f0f2f5);">
+                                <img src="<?php echo htmlspecialchars($media); ?>" alt="Post image">
                             <?php endforeach; ?>
                         </div>
                     <?php endif; ?>
@@ -809,7 +523,6 @@ $pending_count = (int) $pending_stmt->fetchColumn();
 </div>
 
 <script>
-    // ============== PODGLĄD ZDJĘCIA W FORMULARZU POSTA ==============
     function previewImage(event) {
         var reader = new FileReader();
         var imageField = document.getElementById("image-preview");
@@ -821,33 +534,22 @@ $pending_count = (int) $pending_stmt->fetchColumn();
                 container.style.display = "block";
             }
         }
-
         if (event.target.files[0]) {
             reader.readAsDataURL(event.target.files[0]);
         }
     }
 
     function removePreview() {
-        var input = document.getElementById("post-media-upload");
-        var imageField = document.getElementById("image-preview");
-        var container = document.getElementById("image-preview-container");
-
-        input.value = "";
-        imageField.src = "#";
-        container.style.display = "none";
+        document.getElementById("post-media-upload").value = "";
+        document.getElementById("image-preview").src = "#";
+        document.getElementById("image-preview-container").style.display = "none";
     }
 
-    // ============== KARUZELA – PRZEWIJANIE ==============
     function scrollCarousel(direction) {
         var carousel = document.getElementById('suggestionsCarousel');
-        var scrollAmount = 200;
-        carousel.scrollBy({
-            left: direction * scrollAmount,
-            behavior: 'smooth'
-        });
+        carousel.scrollBy({ left: direction * 200, behavior: 'smooth' });
     }
 
-    // ============== DODAJ ZNAJOMEGO (AJAX) – PRZYCISK ZMIENIA SIĘ NA "Wysłano prośbę" ==============
     function addFriend(targetUserId, buttonElement) {
         if (buttonElement.disabled) return;
         buttonElement.disabled = true;
@@ -855,9 +557,7 @@ $pending_count = (int) $pending_stmt->fetchColumn();
 
         fetch('<?php echo $_SERVER['PHP_SELF']; ?>', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: 'action=add_friend&target_user_id=' + encodeURIComponent(targetUserId)
         })
             .then(response => response.json())
@@ -866,7 +566,6 @@ $pending_count = (int) $pending_stmt->fetchColumn();
                     buttonElement.textContent = 'Wysłano prośbę';
                     buttonElement.style.backgroundColor = '#42b72a';
                     buttonElement.style.cursor = 'default';
-                    console.log(data.message);
                 } else {
                     alert(data.message || 'Nie udało się wysłać zaproszenia.');
                     buttonElement.disabled = false;
@@ -880,36 +579,29 @@ $pending_count = (int) $pending_stmt->fetchColumn();
             });
     }
 
-    // ============== USUŃ PROPOZYCJĘ (AJAX + CIASTECZKO) ==============
     function removeSuggestion(targetUserId, buttonElement) {
         var card = buttonElement.closest('.suggestion-card');
 
         fetch('<?php echo $_SERVER['PHP_SELF']; ?>', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: 'action=remove_suggestion&target_user_id=' + encodeURIComponent(targetUserId)
         })
             .then(response => response.json())
             .then(data => {
-                if (data.success) {
-                    if (card) {
-                        card.style.transition = 'opacity 0.3s, transform 0.3s';
-                        card.style.opacity = '0';
-                        card.style.transform = 'scale(0.9)';
-                        setTimeout(function() {
-                            card.remove();
-                            checkEmptyCarousel();
-                        }, 300);
-                    }
-                } else {
+                if (data.success && card) {
+                    card.style.transition = 'opacity 0.3s, transform 0.3s';
+                    card.style.opacity = '0';
+                    card.style.transform = 'scale(0.9)';
+                    setTimeout(function() {
+                        card.remove();
+                        checkEmptyCarousel();
+                    }, 300);
+                } else if (!data.success) {
                     alert(data.message || 'Nie udało się usunąć propozycji.');
                 }
             })
-            .catch(error => {
-                console.error('Błąd:', error);
-            });
+            .catch(error => console.error('Błąd:', error));
     }
 
     function checkEmptyCarousel() {
@@ -917,9 +609,8 @@ $pending_count = (int) $pending_stmt->fetchColumn();
         if (carousel && carousel.querySelectorAll('.suggestion-card').length === 0) {
             var section = carousel.closest('.suggestions-section');
             var wrapper = section.querySelector('.suggestions-carousel-wrapper');
-            if (wrapper) {
-                wrapper.style.display = 'none';
-            }
+            if (wrapper) wrapper.style.display = 'none';
+
             var emptyMsg = document.createElement('div');
             emptyMsg.className = 'suggestions-empty';
             emptyMsg.textContent = 'Brak nowych propozycji znajomych. Zaproś znajomych do serwisu!';
@@ -927,13 +618,10 @@ $pending_count = (int) $pending_stmt->fetchColumn();
         }
     }
 
-    // ============== DYNAMICZNY LICZNIK OCZEKUJĄCYCH ZAPROSZEŃ ==============
     function updatePendingFriendsCount() {
         fetch('<?php echo $_SERVER['PHP_SELF']; ?>', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: 'action=get_pending_count'
         })
             .then(response => response.json())
@@ -941,7 +629,6 @@ $pending_count = (int) $pending_stmt->fetchColumn();
                 if (data.success) {
                     var badge = document.getElementById('pending-friends-count');
                     if (!badge) return;
-
                     if (data.count > 0) {
                         badge.textContent = data.count;
                         badge.style.display = 'flex';
@@ -954,9 +641,7 @@ $pending_count = (int) $pending_stmt->fetchColumn();
     }
 
     setInterval(updatePendingFriendsCount, 15000);
-    document.addEventListener('DOMContentLoaded', function() {
-        updatePendingFriendsCount();
-    });
+    document.addEventListener('DOMContentLoaded', updatePendingFriendsCount);
 </script>
 
 </body>
