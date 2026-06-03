@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once __DIR__ . '/config/database.php';
+require_once __DIR__ . '/auth/send_verification_email.php';
 
 $msg = '';
 $errors = [];
@@ -47,7 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (empty($errors)) {
         try {
-            $stmt = $pdo->prepare("SELECT user_id FROM users WHERE email = ?");
+            $stmt = $pdo->prepare("SELECT user_id, username FROM users WHERE email = ?");
             $stmt->execute([$email]);
             $user = $stmt->fetch();
 
@@ -55,7 +56,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 die("Nie znaleziono użytkownika.");
             }
 
-            $uid = $user['user_id'];
+            $uid      = $user['user_id'];
+            $username = $user['username'];
             $pdo->beginTransaction();
 
             $stmt = $pdo->prepare("UPDATE users SET city = ? WHERE user_id = ?");
@@ -68,8 +70,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute([$uid, $country, $state, $postal_code, $municipality, $city, $street, $house_number]);
 
             $pdo->commit();
+
+            // Generuj token weryfikacyjny i wyślij email
+            $token   = bin2hex(random_bytes(32));
+            $expires = date('Y-m-d H:i:s', strtotime('+24 hours'));
+
+            $stmt = $pdo->prepare(
+                "UPDATE users SET verification_token = :token, token_expires_at = :expires WHERE user_id = :id"
+            );
+            $stmt->execute([':token' => $token, ':expires' => $expires, ':id' => $uid]);
+
+            $emailSent = sendVerificationEmail($email, $username, $token);
+
             unset($_SESSION['email']);
-            $msg = 'Rejestracja zakończona pomyślnie! Możesz się teraz zalogować.';
+
+            if ($emailSent) {
+                $msg = 'Rejestracja przebiegła pomyślnie. Sprawdź swoją skrzynkę e-mail i kliknij link aktywacyjny.';
+            } else {
+                $msg = 'Konto zostało założone, ale nie udało się wysłać maila weryfikacyjnego. Skontaktuj się z administratorem lub użyj opcji ponownego wysłania.';
+            }
             $success = true;
 
         } catch (PDOException $e) {
@@ -322,12 +341,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <div class="auth-card">
         <?php if ($success): ?>
-            <h2>✅ Rejestracja zakończona!</h2>
-            <p class="text-muted font-size-13 m-bottom-15">Twoje konto zostało pomyślnie utworzone.</p>
+            <h2>✅ Konto zostało utworzone!</h2>
+            <p class="text-muted font-size-13 m-bottom-15">Sprawdź skrzynkę e-mail, aby aktywować konto.</p>
             <div class="alert alert-success">
                 <?php echo htmlspecialchars($msg); ?>
             </div>
             <a href="login.php" class="btn btn-success">Przejdź do logowania →</a>
+            <p class="text-center text-muted font-size-13" style="margin-top:14px;">
+                Nie dostałeś maila?
+                <a href="auth/resend_verification.php" style="color:#338336;">Wyślij ponownie</a>
+            </p>
         <?php else: ?>
             <h2>Dane adresowe</h2>
             <p class="text-muted font-size-13 m-bottom-15">Krok 2 z 2 – Twoja lokalizacja</p>

@@ -9,8 +9,9 @@ if (isset($_SESSION['user_id'])) {
     exit;
 }
 
-$error = '';
-$success = '';
+$error       = '';
+$success     = '';
+$show_resend = false;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_once 'config/database.php';
@@ -35,9 +36,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $db = db();
 
             // Zapytanie w zależności od typu danych
-            $sql = "SELECT user_id, username, email, phone, password_hash, first_name, last_name, 
-                           role, status, avatar_url 
-                    FROM users 
+            $sql = "SELECT user_id, username, email, phone, password_hash, first_name, last_name,
+                           role, status, avatar_url, is_verified
+                    FROM users
                     WHERE " . ($field_type === 'email' ? "email = :input" : ($field_type === 'phone' ? "phone = :input" : "username = :input"));
 
             $stmt = $db->prepare($sql);
@@ -46,8 +47,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // Weryfikacja hasła
             if ($user && password_verify($password, $user['password_hash'])) {
-                // Sprawdzenie statusu konta
-                if ($user['status'] !== 'active') {
+                // Sprawdzenie weryfikacji e-mail
+                if (!$user['is_verified']) {
+                    $error = 'Potwierdź swój adres e-mail przed zalogowaniem.';
+                    $show_resend = true;
+                } elseif ($user['status'] !== 'active') {
                     $error = 'Twoje konto nie jest aktywne. Skontaktuj się z administratorem.';
                 } else {
                     // Aktualizacja last_login_at
@@ -160,6 +164,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <?php if ($error): ?>
             <div class="error-message"><?php echo htmlspecialchars($error); ?></div>
+            <?php if ($show_resend): ?>
+                <p style="text-align:center;margin-top:8px;font-size:13px;">
+                    <a href="auth/resend_verification.php" style="color:#338336;">Wyślij ponownie link aktywacyjny</a>
+                </p>
+            <?php endif; ?>
+        <?php endif; ?>
+
+        <?php
+        $verif_msg = $_SESSION['verification_success'] ?? '';
+        unset($_SESSION['verification_success']);
+        if ($verif_msg): ?>
+            <div class="success-message"><?php echo htmlspecialchars($verif_msg); ?></div>
         <?php endif; ?>
 
         <?php if ($success): ?>
