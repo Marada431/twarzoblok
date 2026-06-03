@@ -37,7 +37,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // Zapytanie w zależności od typu danych
             $sql = "SELECT user_id, username, email, phone, password_hash, first_name, last_name,
-                           role, status, avatar_url, is_verified
+                           role, status, avatar_url, is_verified,
+                           banned_until, ban_reason, is_banned_permanent
                     FROM users
                     WHERE " . ($field_type === 'email' ? "email = :input" : ($field_type === 'phone' ? "phone = :input" : "username = :input"));
 
@@ -51,6 +52,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!$user['is_verified']) {
                     $error = 'Potwierdź swój adres e-mail przed zalogowaniem.';
                     $show_resend = true;
+                } elseif (!empty($user['is_banned_permanent'])) {
+                    $reason = !empty($user['ban_reason']) ? ' Powód: ' . htmlspecialchars($user['ban_reason']) : '';
+                    $error = 'Twoje konto zostało permanentnie zablokowane.' . $reason;
+                } elseif (!empty($user['banned_until']) && strtotime($user['banned_until']) > time()) {
+                    $until = date('d.m.Y H:i', strtotime($user['banned_until']));
+                    $reason = !empty($user['ban_reason']) ? ' Powód: ' . htmlspecialchars($user['ban_reason']) : '';
+                    $error = "Twoje konto jest tymczasowo zablokowane do: $until.$reason";
                 } elseif ($user['status'] !== 'active') {
                     $error = 'Twoje konto nie jest aktywne. Skontaktuj się z administratorem.';
                 } else {

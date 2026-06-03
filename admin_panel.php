@@ -1,17 +1,15 @@
 <?php
 session_start();
 
-// 1. OCHRONA: Sprawdzamy czy użytkownik jest zalogowany
+// Przekieruj do nowego panelu admin
 if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
-    header('Location: login.php');
-    exit;
+    header('Location: login.php'); exit;
 }
-
-// 2. OCHRONA: Sprawdzamy czy zalogowany użytkownik ma rolę admina
-if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
-    header('Location: index.php');
-    exit;
+if (!in_array($_SESSION['role'] ?? '', ['admin', 'moderator'])) {
+    header('Location: index.php'); exit;
 }
+header('Location: admin/');
+exit;
 
 // Dołączenie bazy danych
 require_once 'config/database.php';
