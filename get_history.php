@@ -16,8 +16,9 @@ if (!$chatId || !is_numeric($chatId)) {
     echo json_encode(['error' => 'Brak chat_id']);
     exit;
 }
+$chatId = (int)$chatId;
 
-// Czy uczestnik?
+// Weryfikacja uczestnictwa
 $stmt = db()->prepare("SELECT 1 FROM chat_participants WHERE chat_id = ? AND user_id = ?");
 $stmt->execute([$chatId, $_SESSION['user_id']]);
 if (!$stmt->fetch()) {
@@ -26,15 +27,26 @@ if (!$stmt->fetch()) {
     exit;
 }
 
+// Paginacja: before_id ładuje wiadomości starsze niż dany ID
+$beforeId = isset($_GET['before_id']) && is_numeric($_GET['before_id'])
+    ? (int)$_GET['before_id']
+    : PHP_INT_MAX;
+
+$limit = 50;
+
 $stmt = db()->prepare("
-    SELECT cm.message_id, cm.sender_id, u.username, cm.content, cm.sent_at, cm.message_type
+    SELECT cm.message_id, cm.sender_id, u.username, u.avatar_url,
+           cm.content, cm.attachment_url, cm.sent_at, cm.message_type
     FROM chat_messages cm
     JOIN users u ON cm.sender_id = u.user_id
-    WHERE cm.chat_id = ? AND cm.status = 'active'
-    ORDER BY cm.sent_at ASC
-    LIMIT 100
+    WHERE cm.chat_id = ? AND cm.status = 'active' AND cm.message_id < ?
+    ORDER BY cm.sent_at DESC
+    LIMIT ?
 ");
-$stmt->execute([$chatId]);
-$messages = $stmt->fetchAll();
+$stmt->execute([$chatId, $beforeId, $limit]);
+$messages = array_reverse($stmt->fetchAll());
 
-echo json_encode(['messages' => $messages]);
+echo json_encode([
+    'messages' => $messages,
+    'has_more'  => count($messages) === $limit
+]);
