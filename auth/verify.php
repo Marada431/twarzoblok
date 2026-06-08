@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 session_start();
 require_once dirname(__DIR__) . '/config/database.php';
 
@@ -53,35 +53,7 @@ if ($success) {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Weryfikacja konta | TwarzoBlok</title>
-<style>
-  :root {
-    --bg-main: #f0f4f1;
-    --bg-surface: #ffffff;
-    --primary-color: #338336;
-    --text-main: #1b1e1b;
-    --text-muted: #556056;
-    --border-color: #d2ded4;
-    --error: #d32f2f;
-    --error-bg: #ffebee;
-    --radius-main: 8px;
-    --shadow: 0 1px 3px rgba(46,125,50,0.1);
-  }
-  * { margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif; }
-  body { background-color:var(--bg-main); color:var(--text-main); min-height:100vh;
-         display:flex; flex-direction:column; justify-content:center; align-items:center; padding:20px; }
-  .auth-logo { color:var(--primary-color); margin-bottom:24px; font-size:44px; font-weight:800; letter-spacing:-1px; }
-  .card { background:var(--bg-surface); border:1px solid var(--border-color); border-radius:var(--radius-main);
-          box-shadow:var(--shadow); padding:36px; max-width:480px; width:100%; text-align:center; }
-  .alert-error { background:var(--error-bg); color:var(--error); border:1px solid #ffcdd2;
-                 padding:14px 16px; border-radius:var(--radius-main); margin-bottom:20px; font-size:14px; }
-  .card h2 { font-size:20px; margin-bottom:12px; }
-  .card p  { font-size:14px; color:var(--text-muted); margin-bottom:20px; }
-  .btn { display:inline-block; background-color:var(--primary-color); color:#fff; font-weight:600;
-         padding:12px 28px; border-radius:6px; text-decoration:none; font-size:15px; }
-  .btn:hover { background-color:#1b5e20; }
-  .link-small { font-size:13px; color:var(--primary-color); text-decoration:none; }
-  .link-small:hover { text-decoration:underline; }
-</style>
+    <link rel="stylesheet" href="../assets/css/auth.css">
 </head>
 <body>
 <div class="auth-logo">TwarzoBlok</div>

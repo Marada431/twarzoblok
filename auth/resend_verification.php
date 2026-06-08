@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 session_start();
 require_once dirname(__DIR__) . '/config/database.php';
 require_once __DIR__ . '/send_verification_email.php';
@@ -64,43 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Wyślij ponownie link aktywacyjny | TwarzoBlok</title>
-<style>
-  :root {
-    --bg-main: #f0f4f1;
-    --bg-surface: #ffffff;
-    --primary-color: #338336;
-    --primary-hover: #1b5e20;
-    --text-main: #1b1e1b;
-    --text-muted: #556056;
-    --border-color: #d2ded4;
-    --error: #d32f2f;
-    --error-bg: #ffebee;
-    --radius-main: 8px;
-    --shadow: 0 1px 3px rgba(46,125,50,0.1);
-    --transition: all 0.2s ease-in-out;
-  }
-  * { margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif; }
-  body { background-color:var(--bg-main); color:var(--text-main); min-height:100vh;
-         display:flex; flex-direction:column; justify-content:center; align-items:center; padding:20px; }
-  .auth-logo { color:var(--primary-color); margin-bottom:24px; font-size:44px; font-weight:800; letter-spacing:-1px; }
-  .card { background:var(--bg-surface); border:1px solid var(--border-color); border-radius:var(--radius-main);
-          box-shadow:var(--shadow); padding:36px; max-width:440px; width:100%; }
-  .card h2 { font-size:20px; margin-bottom:8px; }
-  .card p  { font-size:14px; color:var(--text-muted); margin-bottom:24px; }
-  .form-group { display:flex; flex-direction:column; gap:6px; margin-bottom:16px; }
-  .form-group label { font-size:13px; font-weight:600; }
-  .form-input { width:100%; padding:12px; border:1px solid var(--border-color); border-radius:6px;
-                font-size:14px; outline:none; transition:var(--transition); }
-  .form-input:focus { border-color:var(--primary-color); box-shadow:0 0 0 2px rgba(46,125,50,0.2); }
-  .btn-primary { background-color:var(--primary-color); color:#fff; font-weight:600; border:none;
-                 border-radius:6px; padding:13px; font-size:15px; width:100%; cursor:pointer;
-                 transition:var(--transition); }
-  .btn-primary:hover { background-color:var(--primary-hover); }
-  .alert { padding:12px 16px; border-radius:var(--radius-main); margin-bottom:20px; font-size:13px; }
-  .alert-success { background:#e8f5e9; color:#2e7d32; border:1px solid #a5d6a7; }
-  .back-link { display:block; text-align:center; margin-top:16px; font-size:13px; color:var(--primary-color); text-decoration:none; }
-  .back-link:hover { text-decoration:underline; }
-</style>
+    <link rel="stylesheet" href="../assets/css/auth.css">
 </head>
 <body>
 <div class="auth-logo">TwarzoBlok</div>

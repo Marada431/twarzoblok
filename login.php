@@ -103,65 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Logowanie - Twarzoblok</title>
-    <link rel="stylesheet" href="css/style.css">
-    <style>
-        /* Dodatkowe style specyficzne dla strony logowania */
-        .login-options {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin: 15px 0;
-        }
-        .remember-me {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            cursor: pointer;
-        }
-        .remember-me input {
-            width: 18px;
-            height: 18px;
-            cursor: pointer;
-            accent-color: var(--primary-color);
-        }
-        .forgot-password {
-            color: var(--primary-color);
-            font-size: 14px;
-        }
-        .register-link {
-            margin-top: 20px;
-            text-align: center;
-            padding-top: 15px;
-            border-top: 1px solid var(--border-color);
-        }
-        .error-message {
-            background-color: #fbe9e7;
-            color: #c62828;
-            padding: 12px;
-            border-radius: var(--radius-main);
-            margin-bottom: 20px;
-            border-left: 4px solid #c62828;
-        }
-        .success-message {
-            background-color: #e8f5e9;
-            color: #2e7d32;
-            padding: 12px;
-            border-radius: var(--radius-main);
-            margin-bottom: 20px;
-            border-left: 4px solid #2e7d32;
-        }
-        .input-hint {
-            font-size: 12px;
-            color: var(--text-muted);
-            margin-top: 5px;
-        }
-        .auth-footer {
-            text-align: center;
-            margin-top: 30px;
-            color: var(--text-muted);
-            font-size: 12px;
-        }
-    </style>
+    <link rel="stylesheet" href="assets/css/main.css">
 </head>
 <body>
 <div class="auth-wrapper">
