@@ -19,3 +19,4 @@ uploads/
 # System operacyjny
 .DS_Store
 Thumbs.db
+.idea/
