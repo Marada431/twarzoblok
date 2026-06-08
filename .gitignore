@@ -1,0 +1,21 @@
+# Konfiguracja z danymi wrażliwymi
+config/mail_config.php
+
+# Zależności zewnętrzne (instaluj przez Composer lub ręcznie)
+vendor/
+
+# Przesłane pliki użytkowników
+upload_img/
+uploads/
+
+# Logi PHP
+*.log
+
+# Środowisko IDE
+.idea/
+.vscode/
+*.iml
+
+# System operacyjny
+.DS_Store
+Thumbs.db

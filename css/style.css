@@ -1,0 +1,540 @@
+/* ==========================================
+   1. ZMIENNE I KONFIGURACJA (Motyw TwarzBlok - Green)
+   ========================================== */
+:root {
+    --bg-main: #f0f4f1;         /* Jasne, lekko zielonkawe tło portalu */
+    --bg-surface: #ffffff;      /* Tło kart, postów, wiadomości */
+    --bg-hover: #e1ebe3;        /* Tło po najechaniu na elementy (delikatny zielony) */
+    --primary-color: #338336;   /* Główna, mocna zieleń TwarzBloku */
+    --primary-hover: #1b5e20;   /* Ciemniejsza zieleń po najechaniu */
+    --text-main: #1b1e1b;       /* Główny tekst (bardzo ciemna zieleń/czarny) */
+    --text-muted: #556056;      /* Tekst pomocniczy, daty, opisy */
+    --border-color: #d2ded4;    /* Granice i linie podziału */
+    --success: #4caf50;         /* Jasna zieleń (status online, rejestracja) */
+
+    --radius-main: 8px;         /* Zaokrąglenie kart */
+    --radius-round: 50%;        /* Do awatarów i przycisków kołowych */
+    --shadow: 0 1px 3px rgba(46, 125, 50, 0.1); /* Subtelny, zielonkawy cień */
+    --transition: all 0.2s ease-in-out;
+}
+
+/* Szybki Dark Mode dla TwarzBloku */
+body.dark-mode {
+    --bg-main: #121813;
+    --bg-surface: #1e2620;
+    --bg-hover: #2a362d;
+    --primary-color: #4caf50;
+    --primary-hover: #81c784;
+    --text-main: #e8ece9;
+    --text-muted: #9aa79c;
+    --border-color: #2d3b30;
+}
+
+/* ==========================================
+   2. RESET I STYLE GLOBALNE
+   ========================================== */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+    background-color: var(--bg-main);
+    color: var(--text-main);
+    line-height: 1.5;
+}
+
+a {
+    color: var(--primary-color);
+    text-decoration: none;
+    transition: var(--transition);
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+button, .btn {
+    font-weight: 600;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 16px;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+hr {
+    margin: 15px 0;
+    border: 0;
+    border-top: 1px solid var(--border-color);
+}
+
+/* ==========================================
+   3. STRUKTURA I UKŁAD (Layout portalu)
+   ========================================== */
+.fb-container {
+    display: grid;
+    grid-template-columns: 580px 1fr 360px;
+    gap: 20px;
+    margin: 0 auto;
+    padding: 20px;
+    padding-top: 80px;
+}
+
+.fb-container.game-layout {
+    grid-template-columns: 1fr 380px;
+}
+
+@media (max-width: 1100px) {
+    .fb-container, .fb-container.game-layout { grid-template-columns: 240px 1fr; }
+    .sidebar-right, .chat-sidebar { display: none; margin-right: 0%}
+}
+@media (max-width: 768px) {
+    .fb-container, .fb-container.game-layout { grid-template-columns: 1fr; }
+    .sidebar-left { display: none; }
+}
+
+/* Górny pasek nawigacji */
+.navbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 70px;
+    background-color: var(--bg-surface);
+    box-shadow: var(--shadow);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 16px;
+    z-index: 1000;
+    border-bottom: 2px solid var(--primary-color); /* Charakterystyczny zielony pasek */
+}
+.navbar-brand {
+    font-weight: bold;
+    font-size: 22px;
+    color: var(--primary-color);
+    letter-spacing: -0.5px;
+}
+.navbar-links {
+    display: flex;
+    gap: 60px;
+    margin-left: -420px;
+    margin-top: 10px;
+}
+
+.navbar-links2 {
+    display: flex;
+    margin-left: -250px;
+    margin-top: 10px;
+}
+
+/* ==========================================
+   4. UNIWERSALNE KOMPONENTY
+   ========================================== */
+.card {
+    margin-top: 10px;
+}
+
+/* Przyciski */
+.btn-primary { background-color: var(--primary-color); color: white; }
+.btn-primary:hover { background-color: var(--primary-hover); }
+.btn-success { background-color: var(--success); color: white; }
+.btn-secondary { background-color: var(--bg-hover); color: var(--text-main); }
+.btn-secondary:hover { background-color: var(--border-color); }
+
+/* Formularze */
+.form-group {
+    margin-bottom: 15px;
+}
+.form-input {
+    width: 70%;
+    padding: 12px;
+    background-color: var(--bg-main);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-main);
+    outline: none;
+    transition: var(--transition);
+    background-color: white;
+}
+.form-input:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(46, 125, 50, 0.2);
+    background-color: var(--bg-surface);
+}
+
+/* Awatary i Kontakty */
+.avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-round);
+    object-fit: cover;
+    background-color: var(--border-color);
+    border: 1px solid var(--border-color);
+}
+.avatar.online {
+    border: 2px solid var(--success);
+}
+.menu-list li,
+.menu-list a,
+.contact-item {
+    align-items: center;
+    text-decoration: none;
+    display: flex;
+    gap: 10px;
+    cursor: pointer;
+    border-radius: var(--radius-main);
+    transition: var(--transition);
+}
+
+.contact-item2{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    margin-bottom: 10px;
+}
+
+.contact-item:hover {
+    background-color: var(--bg-hover);
+}
+
+/* Listy menu */
+.menu-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* ==========================================
+   5. STYLE DLA SEKCE SPECJALNYCH
+   ========================================== */
+
+/* Posty (Feed) */
+.post-create-box {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+    background-color: white;
+    border-radius: 10px;
+    padding: 12px 16px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.05);
+    max-width: 600px;
+    width: 100%;
+    align-items: center;
+}
+
+.post-create-box input {
+    flex-grow: 1; /* To zlikwiduje pustą przestrzeń i przesunie przycisk do prawej krawędzi */
+
+    /* Opcjonalne poprawki estetyczne w stylu FB: */
+    height: 40px;
+    padding: 0 16px;
+    border: 1px solid #e4e6eb;
+    border-radius: 20px;
+    background-color: #f0f2f5;
+    outline: none;
+}
+
+.post-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.post-author { font-weight: 600; color: var(--text-main); }
+.post-author:hover { color: var(--primary-color); }
+.post-time { font-size: 12px; color: var(--text-muted); }
+.post-content { margin-bottom: 12px; }
+.post-actions {
+    display: flex;
+    border-top: 1px solid var(--border-color);
+    padding-top: 8px;
+    justify-content: space-around;
+}
+
+.reels-section-title {
+    margin-bottom: 8px;
+    color: var(--text-muted);
+}
+
+.reels-container {
+    display: flex;
+    gap: 10px;
+    padding-bottom: 15px;
+}
+
+.reel-card {
+    min-width: 110px;
+    height: 200px;
+    border-radius: 10px;
+    background-color: #121813;
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+    border: 1px solid var(--border-color);
+}
+
+.reel-badge {
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    color: white;
+    font-size: 12px;
+    font-weight: bold;
+    text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
+}
+
+.auth-wrapper {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.auth-logo {
+    color: var(--primary-color);
+    margin-bottom: 20px;
+    font-size: 44px;
+    font-weight: 800;
+    letter-spacing: -1px;
+}
+
+.auth-card {
+    width: 100%;
+    max-width: 450px;
+    padding: 25px;
+}
+
+.auth-links {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* Messenger i Czat w grach */
+.chat-window {
+    display: flex;
+    flex-direction: column;
+    height: 560px;
+}
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.message {
+    max-width: 70%;
+    padding: 8px 12px;
+    border-radius: 18px;
+    font-size: 14px;
+}
+.message-sender {
+    font-size: 10px;
+    display: block;
+    margin-bottom: 2px;
+}
+.message.sent {
+    background-color: var(--primary-color);
+    color: white;
+    align-self: flex-end;
+}
+.message.sent .message-sender { color: rgba(255, 255, 255, 0.7); }
+.message.received {
+    background-color: var(--bg-hover);
+    color: var(--text-main);
+    align-self: flex-start;
+}
+.message.received .message-sender { color: var(--text-muted); }
+.chat-footer {
+    margin-top: 10px;
+    display: flex;
+    gap: 8px;
+}
+
+/* Mini Gry & Ranking */
+.game-screen {
+    background-color: #121813;
+    height: 350px;
+    margin: 20px 0;
+    border-radius: var(--radius-main);
+    color: white;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    border: 2px solid var(--primary-color);
+}
+.leaderboard-list { list-style: none; margin-top: 10px; }
+.leaderboard-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px dashed var(--border-color);
+}
+.leaderboard-item.gold { font-weight: bold; color: #cfb53b; }
+.leaderboard-item.silver { color: #a8a8a8; }
+
+/* Pomocnicze klasy czyszczące HTML */
+.text-center { text-align: center; }
+.text-muted { color: var(--text-muted); }
+.w-100 { width: 100%; }
+.m-bottom-10 { margin-bottom: 10px; }
+.m-bottom-15 { margin-bottom: 15px; }
+.m-bottom-20 { margin-bottom: 20px; }
+.font-size-13 { font-size: 13px; }
+.font-size-14 { font-size: 14px; }
+.btn-submit-size { font-size: 16px; padding: 12px; margin-top: 10px; }
+
+svg{
+    height: 30px;
+    width: 30px;
+}
+
+.suchemashine {
+    background-color: #f0f2f5;
+    border-radius: 50px;
+    border: 1px solid transparent;
+    height: 40px;
+    width: 240px;
+    padding: 0 16px 0 38px;
+    font-size: 15px;
+    color: #050505;
+    outline: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Cpath fill='%2365676b' d='M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0s208 93.1 208 208zM208 352a144 144 0 1 0 0-288 144 144 0 1 0 0 288z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: 14px center;
+    background-size: 16px;
+}
+
+img {
+    width: 50px;
+    height: 50px;
+}
+
+.card1{
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    background-color: white;
+    border-radius: 10px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.05);
+    max-width: 600px;
+    width: 100%;
+    align-items: center;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.card2{
+    padding: 16px;
+    margin-bottom: 20px;
+    gap: 10px;
+    border-radius: 10px;
+}
+
+.icon-wrapper {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 10px;
+    background-color: #dcd2d2;
+    border-radius: 100px;
+    padding: 10px 12px;
+    box-sizing: border-box;
+}
+
+.icon-wrapper svg {
+    width: 24px;
+    height: 24px;
+    display: block;
+}
+
+.avatar-navbar-wrapper{
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--border-color, #e2e8f0);
+}
+
+.user-profile-dropdown {
+    position: relative;
+    display: inline-block;
+    padding-bottom: 6px;
+    margin-bottom: -6px;
+}
+
+.dropdown-menu-content {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: 52px;
+    width: 250px;
+    background-color: #ffffff;
+    min-width: 150px;
+    box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.15);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+/* "Mostek" nad menu - teraz jest solidny i biały */
+.dropdown-menu-content::before {
+    content: '';
+    position: absolute;
+    top: -10px; /* Wysokość dopasowana do szczeliny */
+    left: -1px; /* Wyrównanie do lewej ramki menu */
+    width: calc(100% + 2px); /* Rozszerzenie, żeby pokryć boczne ramki */
+    height: 10px;
+    background-color: #ffffff; /* ZMIENIONO: Stały biały kolor zamiast przezroczystego */
+    border-left: 1px solid #e2e8f0; /* Dodajemy boczne ramki do mostka */
+    border-right: 1px solid #e2e8f0;
+    border-top: 1px solid #e2e8f0; /* Górna krawędź menu */
+    border-radius: 8px 8px 0 0; /* Zaokrąglenie przeniesione na samą górę całego bloku */
+}
+
+/* Pojawienie się menu po najechaniu */
+.user-profile-dropdown:hover .dropdown-menu-content {
+    display: block;
+}
+
+.dropdown-item {
+    padding: 12px 16px;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    font-size: 14px;
+    position: relative;
+    justify-content: center;
+}
+
+.dropdown-item.logout-btn:hover {
+    color: #ef4444;
+}
+
+.create_post{
+    font-size: 20px;
+    display: flex;
+    justify-content: center;
+    font-weight: bold;
+}
+
+.navbar-links a svg {
+    width: 28px;
+    height: 28px;
+    fill: var(--primary-color);
+    transition: var(--transition);
+}
+
+.navbar-links a:hover svg {
+    fill: var(--primary-hover);
+}
