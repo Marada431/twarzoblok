@@ -1,0 +1,138 @@
+/* ── Badge znajomych w navbarze ── */
+.friend-badge { position: absolute; top: -8px; right: -10px; background: #e63946; color: #fff; border-radius: 50%; min-width: 20px; height: 20px; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; padding: 0 4px; box-shadow: 0 0 0 2px var(--bg-main,#fff); }
+
+/* ── Sugestie znajomych (index.php) ── */
+.suggestions-section { background: var(--bg-surface); border-radius: 10px; padding: 16px; box-shadow: 0 1px 2px rgba(0,0,0,.1); margin-bottom: 15px; }
+.suggestions-section h4 { font-size: 16px; font-weight: 600; color: var(--text-main); margin-bottom: 12px; }
+.suggestions-carousel-wrapper { position: relative; display: flex; align-items: center; }
+.suggestions-carousel { display: flex; gap: 12px; overflow-x: auto; scroll-behavior: smooth; scroll-snap-type: x mandatory; padding: 4px 2px 8px; scrollbar-width: thin; scrollbar-color: var(--border-color) transparent; }
+.suggestions-carousel::-webkit-scrollbar { height: 6px; }
+.suggestions-carousel::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 10px; }
+.suggestion-card { flex: 0 0 auto; width: 180px; background: var(--bg-surface); border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.1); padding: 16px 12px; text-align: center; scroll-snap-align: start; position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; transition: transform .2s, box-shadow .2s; }
+.suggestion-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,.15); }
+.suggestion-avatar { width: 72px; height: 72px; border-radius: 50%; overflow: hidden; background: var(--border-color); }
+.suggestion-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.suggestion-name { font-weight: 600; font-size: 14px; color: var(--text-main); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.suggestion-location { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 4px; justify-content: center; }
+.suggestion-actions { display: flex; gap: 8px; width: 100%; margin-top: 4px; }
+.btn-add-friend { flex: 1; padding: 7px 10px; font-size: 13px; font-weight: 600; border: none; border-radius: 6px; cursor: pointer; background: var(--primary-color); color: #fff; transition: background .2s; }
+.btn-add-friend:hover { background: var(--primary-hover); }
+.btn-add-friend:disabled { background: #42b72a; cursor: default; }
+.btn-remove-suggestion { padding: 7px 10px; font-size: 13px; font-weight: 600; border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer; background: transparent; color: var(--text-muted); transition: background .2s; white-space: nowrap; }
+.btn-remove-suggestion:hover { background: var(--bg-hover); }
+.carousel-arrow { position: absolute; top: 50%; transform: translateY(-50%); z-index: 10; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border-color); background: rgba(255,255,255,.95); cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,.2); transition: box-shadow .2s; }
+.carousel-arrow:hover { box-shadow: 0 4px 12px rgba(0,0,0,.25); }
+.carousel-arrow-left { left: -12px; }
+.carousel-arrow-right { right: -12px; }
+.carousel-arrow svg { width: 18px; height: 18px; fill: var(--text-main); }
+.suggestions-empty { text-align: center; padding: 20px; color: var(--text-muted); font-size: 14px; }
+
+/* ── Zaproszenia do znajomych (friend_requests.php) ── */
+.requests-container {
+    max-width: 700px;
+    margin: 30px auto;
+    padding: 0 15px;
+}
+
+.tabs {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border-color, #ddd);
+    padding-bottom: 10px;
+}
+
+.tabs a {
+    text-decoration: none;
+    color: var(--text-muted, #65676b);
+    font-weight: 500;
+    padding-bottom: 8px;
+    border-bottom: 2px solid transparent;
+}
+
+.tabs a.active {
+    color: var(--text-main, #1c1e21);
+    border-bottom-color: var(--primary-color, #1877f2);
+    font-weight: 600;
+}
+
+.request-card {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    background: var(--bg-surface, #fff);
+    padding: 15px;
+    border-radius: 10px;
+    margin-bottom: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.request-avatar {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    overflow: hidden;
+    flex-shrink: 0;
+    background: var(--border-color, #ddd);
+}
+
+.request-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.request-info {
+    flex: 1;
+}
+
+.request-name {
+    font-weight: 600;
+    font-size: 16px;
+    color: var(--text-main, #1c1e21);
+}
+
+.request-meta {
+    font-size: 13px;
+    color: var(--text-muted, #65676b);
+    margin-top: 3px;
+}
+
+.request-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.btn-accept {
+    background-color: var(--primary-color, #1877f2);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.btn-accept:hover {
+    background-color: var(--primary-hover, #166fe5);
+}
+
+.btn-reject {
+    background-color: #e4e6eb;
+    color: var(--text-main, #1c1e21);
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.btn-reject:hover {
+    background-color: #d8dadf;
+}
+
+.empty-message {
+    text-align: center;
+    color: var(--text-muted);
+    margin-top: 40px;
+}

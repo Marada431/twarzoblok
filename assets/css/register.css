@@ -1,0 +1,484 @@
+﻿/* ==========================================
+           ZMIENNE I KONFIGURACJA (Motyw TwarzBlok - Green)
+           ========================================== */
+        :root {
+            --bg-main: #f0f4f1;
+            --bg-surface: #ffffff;
+            --bg-hover: #e1ebe3;
+            --primary-color: #338336;
+            --primary-hover: #1b5e20;
+            --text-main: #1b1e1b;
+            --text-muted: #556056;
+            --border-color: #d2ded4;
+            --success: #4caf50;
+            --error: #d32f2f;
+            --error-bg: #ffebee;
+            --radius-main: 8px;
+            --radius-round: 50%;
+            --shadow: 0 1px 3px rgba(46, 125, 50, 0.1);
+            --transition: all 0.2s ease-in-out;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            line-height: 1.5;
+            min-height: 100vh;
+        }
+
+        /* ==========================================
+           STRUKTURA STRONY REJESTRACJI
+           ========================================== */
+        .auth-wrapper {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .auth-logo {
+            color: var(--primary-color);
+            margin-bottom: 10px;
+            font-size: 44px;
+            font-weight: 800;
+            letter-spacing: -1px;
+        }
+
+        .auth-subtitle {
+            color: var(--text-muted);
+            margin-bottom: 25px;
+            font-size: 15px;
+        }
+
+        .auth-card {
+            width: 100%;
+            max-width: 580px;
+            background-color: var(--bg-surface);
+            border-radius: var(--radius-main);
+            box-shadow: var(--shadow);
+            padding: 30px;
+            border: 1px solid var(--border-color);
+        }
+
+        .auth-card h2 {
+            font-size: 22px;
+            margin-bottom: 5px;
+            color: var(--text-main);
+        }
+
+        .step-indicator {
+            display: flex;
+            gap: 8px;
+            margin: 20px 0;
+        }
+
+        .step {
+            height: 4px;
+            flex: 1;
+            background: var(--border-color);
+            border-radius: 2px;
+        }
+
+        .step.active {
+            background: var(--primary-color);
+        }
+
+        /* ==========================================
+           FORMY I INPUTY
+           ========================================== */
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            margin-bottom: 5px;
+        }
+
+        .form-group.full {
+            grid-column: 1 / -1;
+        }
+
+        .form-group label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .required-mark {
+            color: var(--error);
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px;
+            background-color: white;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-main);
+            outline: none;
+            transition: var(--transition);
+            font-size: 14px;
+        }
+
+        .form-input:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(46, 125, 50, 0.2);
+            background-color: var(--bg-surface);
+        }
+
+        .form-group.error .form-input {
+            border-color: var(--error);
+            background-color: var(--error-bg);
+        }
+
+        select.form-input {
+            cursor: pointer;
+        }
+
+        textarea.form-input {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .error-msg {
+            font-size: 12px;
+            color: var(--error);
+            min-height: 16px;
+        }
+
+        /* ==========================================
+           UPLOAD AVATARA
+           ========================================== */
+        .file-upload-area {
+            border: 2px dashed var(--border-color);
+            border-radius: var(--radius-main);
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: var(--transition);
+            background-color: var(--bg-main);
+        }
+
+        .file-upload-area:hover {
+            border-color: var(--primary-color);
+            background-color: var(--bg-hover);
+        }
+
+        .file-upload-area.has-file {
+            border-style: solid;
+            border-color: var(--success);
+            background-color: #e8f5e9;
+        }
+
+        .file-upload-area .icon {
+            font-size: 2rem;
+            margin-bottom: 6px;
+        }
+
+        .file-upload-area .text {
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .file-upload-area input[type="file"] {
+            display: none;
+        }
+
+        /* ==========================================
+           PRZYCISKI
+           ========================================== */
+        .btn {
+            font-weight: 600;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            cursor: pointer;
+            transition: var(--transition);
+            font-size: 14px;
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: white;
+            width: 100%;
+            padding: 13px;
+            font-size: 16px;
+            margin-top: 20px;
+        }
+
+        .btn-primary:hover {
+            background-color: var(--primary-hover);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        /* ==========================================
+           KOMUNIKATY
+           ========================================== */
+        .alert {
+            padding: 12px 16px;
+            border-radius: var(--radius-main);
+            margin-bottom: 20px;
+            font-size: 13px;
+        }
+
+        .alert-error {
+            background-color: var(--error-bg);
+            color: var(--error);
+            border: 1px solid #ffcdd2;
+        }
+
+        .text-center { text-align: center; }
+        .text-muted { color: var(--text-muted); }
+        .font-size-13 { font-size: 13px; }
+        .m-bottom-15 { margin-bottom: 15px; }
+
+        @media (max-width: 500px) {
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+            .auth-card {
+                padding: 20px;
+            }
+        }
+
+/* ── Krok 2 rejestracji ── */
+/* ==========================================
+           ZMIENNE I KONFIGURACJA (Motyw TwarzBlok - Green)
+           ========================================== */
+        :root {
+            --bg-main: #f0f4f1;
+            --bg-surface: #ffffff;
+            --bg-hover: #e1ebe3;
+            --primary-color: #338336;
+            --primary-hover: #1b5e20;
+            --text-main: #1b1e1b;
+            --text-muted: #556056;
+            --border-color: #d2ded4;
+            --success: #4caf50;
+            --error: #d32f2f;
+            --error-bg: #ffebee;
+            --radius-main: 8px;
+            --radius-round: 50%;
+            --shadow: 0 1px 3px rgba(46, 125, 50, 0.1);
+            --transition: all 0.2s ease-in-out;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            line-height: 1.5;
+            min-height: 100vh;
+        }
+
+        a {
+            color: var(--primary-color);
+            text-decoration: none;
+            transition: var(--transition);
+        }
+        a:hover { text-decoration: underline; }
+
+        /* ==========================================
+           STRUKTURA STRONY REJESTRACJI
+           ========================================== */
+        .auth-wrapper {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .auth-logo {
+            color: var(--primary-color);
+            margin-bottom: 10px;
+            font-size: 44px;
+            font-weight: 800;
+            letter-spacing: -1px;
+        }
+
+        .auth-subtitle {
+            color: var(--text-muted);
+            margin-bottom: 25px;
+            font-size: 15px;
+        }
+
+        .auth-card {
+            width: 100%;
+            max-width: 520px;
+            background-color: var(--bg-surface);
+            border-radius: var(--radius-main);
+            box-shadow: var(--shadow);
+            padding: 30px;
+            border: 1px solid var(--border-color);
+        }
+
+        .auth-card h2 {
+            font-size: 22px;
+            margin-bottom: 5px;
+            color: var(--text-main);
+        }
+
+        .step-indicator {
+            display: flex;
+            gap: 8px;
+            margin: 20px 0;
+        }
+
+        .step {
+            height: 4px;
+            flex: 1;
+            background: var(--border-color);
+            border-radius: 2px;
+        }
+
+        .step.done { background: var(--success); }
+        .step.active { background: var(--primary-color); }
+
+        /* ==========================================
+           FORMY I INPUTY
+           ========================================== */
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            margin-bottom: 5px;
+        }
+
+        .form-group.full {
+            grid-column: 1 / -1;
+        }
+
+        .form-group label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .required-mark {
+            color: var(--error);
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px;
+            background-color: white;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-main);
+            outline: none;
+            transition: var(--transition);
+            font-size: 14px;
+        }
+
+        .form-input:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(46, 125, 50, 0.2);
+            background-color: var(--bg-surface);
+        }
+
+        .form-group.error .form-input {
+            border-color: var(--error);
+            background-color: var(--error-bg);
+        }
+
+        .error-msg {
+            font-size: 12px;
+            color: var(--error);
+            min-height: 16px;
+        }
+
+        /* ==========================================
+           PRZYCISKI
+           ========================================== */
+        .btn {
+            font-weight: 600;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            cursor: pointer;
+            transition: var(--transition);
+            font-size: 14px;
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: white;
+            width: 100%;
+            padding: 13px;
+            font-size: 16px;
+            margin-top: 20px;
+        }
+
+        .btn-primary:hover { background-color: var(--primary-hover); }
+        .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        .btn-success {
+            background-color: var(--success);
+            color: white;
+            width: 100%;
+            padding: 13px;
+            font-size: 16px;
+            margin-top: 20px;
+            display: block;
+            text-align: center;
+        }
+
+        .btn-success:hover {
+            background-color: #388e3c;
+            text-decoration: none;
+            color: white;
+        }
+
+        /* ==========================================
+           KOMUNIKATY
+           ========================================== */
+        .alert {
+            padding: 12px 16px;
+            border-radius: var(--radius-main);
+            margin-bottom: 20px;
+            font-size: 13px;
+        }
+
+        .alert-success {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+            border: 1px solid #a5d6a7;
+        }
+
+        .alert-error {
+            background-color: var(--error-bg);
+            color: var(--error);
+            border: 1px solid #ffcdd2;
+        }
+
+        .text-center { text-align: center; }
+        .text-muted { color: var(--text-muted); }
+        .font-size-13 { font-size: 13px; }
+        .m-bottom-15 { margin-bottom: 15px; }
+
+        @media (max-width: 500px) {
+            .form-grid { grid-template-columns: 1fr; }
+            .auth-card { padding: 20px; }
+        }

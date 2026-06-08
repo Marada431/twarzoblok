@@ -1,0 +1,29 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   Nadpisania specyficzne dla strony czatu (chat.php).
+   Ten plik musi być załadowany PO main.css, żeby kaskada działała poprawnie.
+   Nie ładuj go na innych stronach – display:none i overflow:hidden złamałoby
+   messages.php oraz games.php.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* Ograniczenie rozmiaru SVG */
+svg { max-width: 24px; max-height: 24px; }
+
+/* Brak przewijania strony w widoku czatu */
+body { overflow: hidden; }
+
+/* Okno czatu – ukryte domyślnie, JS je pokazuje; pełna wysokość zamiast 560px */
+.chat-window {
+    display: none;
+    flex-direction: column;
+    height: 100%;
+}
+
+/* Obszar wiadomości – inne padding/gap niż w messages.php */
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
