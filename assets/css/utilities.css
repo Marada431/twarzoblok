@@ -1,0 +1,8 @@
+.text-center { text-align: center; }
+.text-muted { color: var(--text-muted); }
+.w-100 { width: 100%; }
+.m-bottom-10 { margin-bottom: 10px; }
+.m-bottom-15 { margin-bottom: 15px; }
+.m-bottom-20 { margin-bottom: 20px; }
+.font-size-13 { font-size: 13px; }
+.font-size-14 { font-size: 14px; }

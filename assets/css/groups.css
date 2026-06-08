@@ -1,0 +1,26 @@
+/* ── Mini gry i ranking ── */
+.game-screen {
+    background-color: #121813;
+    height: 350px;
+    margin: 20px 0;
+    border-radius: var(--radius-main);
+    color: white;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    border: 2px solid var(--primary-color);
+}
+
+.leaderboard-list { list-style: none; margin-top: 10px; }
+
+.leaderboard-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px dashed var(--border-color);
+}
+
+.leaderboard-item.gold { font-weight: bold; color: #cfb53b; }
+.leaderboard-item.silver { color: #a8a8a8; }

@@ -1,0 +1,48 @@
+/* ── Nagłówek posta (style.css) ── */
+.post-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.post-author { font-weight: 600; color: var(--text-main); }
+.post-author:hover { color: var(--primary-color); }
+.post-time { font-size: 12px; color: var(--text-muted); }
+.post-content { margin-bottom: 12px; }
+.post-actions {
+    display: flex;
+    border-top: 1px solid var(--border-color);
+    padding-top: 8px;
+    justify-content: space-around;
+}
+
+/* ── Karta posta w feedzie (index.php) ── */
+.post-feed-card { background: var(--bg-surface); border-radius: 10px; padding: 15px; margin-bottom: 15px; box-shadow: 0 1px 2px rgba(0,0,0,.1); }
+.post-feed-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.avatar-box { width: 40px; height: 40px; border-radius: 50%; overflow: hidden; flex-shrink: 0; }
+.avatar-box img { width: 100%; height: 100%; object-fit: cover; }
+.placeholder-svg { width: 100%; height: 100%; background: var(--border-color); display: flex; align-items: center; justify-content: center; }
+.post-feed-author { font-weight: 600; font-size: 15px; color: var(--text-main); }
+.post-feed-time { font-size: 12px; color: var(--text-muted); }
+.post-feed-content { font-size: 15px; color: var(--text-main); margin-bottom: 10px; line-height: 1.5; }
+.relative-header { position: relative!important; }
+
+/* ── Opcje posta ── */
+.post-options-dropdown { position: absolute; right: 0; top: 50%; transform: translateY(-50%); z-index: 10; }
+.post-options-trigger { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.post-options-trigger:hover { background: var(--bg-hover); }
+.post-options-menu { display: none; position: absolute; right: 0; top: 100%; background: #fff; min-width: 140px; border: 1px solid var(--border-color); border-radius: var(--radius-main); box-shadow: 0 4px 12px rgba(0,0,0,.15); padding: 5px 0; z-index: 100; }
+.post-options-dropdown:hover .post-options-menu { display: block; }
+.post-options-item { display: block; padding: 8px 16px; color: #1c1e21!important; font-size: 14px; font-weight: 500; text-decoration: none!important; }
+.post-options-item:hover { background: var(--bg-hover); }
+.post-options-item.danger:hover { background: #ffebe9; color: #e41e3f!important; }
+.post-feed-card:hover { z-index: 999; position: relative; }
+
+/* ── Galeria mediów ── */
+.media-gallery { border-radius: 8px; overflow: hidden; margin-top: 10px; cursor: pointer; }
+.media-gallery.gallery-1 .media-tile img,
+.media-gallery.gallery-1 .media-tile video { max-height: 500px; object-fit: contain; width: 100%; background: #000; }
+.media-gallery.gallery-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; max-height: 300px; }
+.media-gallery.gallery-3 { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 150px 150px; gap: 2px; }
+.media-gallery.gallery-3 .media-tile:first-child { grid-row: span 2; }
+.media-gallery.gallery-4plus { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 200px 200px; gap: 2px; }
+.media-tile { overflow: hidden; position: relative; }
+.media-tile img, .media-tile video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.media-tile-more { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; background-size: cover; background-position: center; }
+.media-tile-more::before { content: ''; position: absolute; inset: 0; background: rgba(0,0,0,.45); }
+.media-tile-more span { position: relative; color: #fff; font-size: 28px; font-weight: 700; }

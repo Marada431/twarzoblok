@@ -1,0 +1,29 @@
+button, .btn {
+    font-weight: 600;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 16px;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.btn-primary { background-color: var(--primary-color); color: white; }
+.btn-primary:hover { background-color: var(--primary-hover); }
+.btn-success { background-color: var(--success); color: white; }
+.btn-secondary { background-color: var(--bg-hover); color: var(--text-main); }
+.btn-secondary:hover { background-color: var(--border-color); }
+
+.btn-submit-size { font-size: 16px; padding: 12px; margin-top: 10px; }
+
+/* Feed post submit */
+.btn-submit-post { border: none; background: var(--primary-color); color: #fff; padding: 6px 20px; font-weight: 600; border-radius: 20px; cursor: pointer; transition: background .2s; }
+.btn-submit-post:hover { background: var(--primary-hover); }
+
+/* Modal buttons */
+.fb-btn { padding: 8px 16px; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.fb-btn-secondary { background: #e4e6eb; color: #050505; }
+.fb-btn-secondary:hover { background: #d8dadf; }
+.fb-btn-primary { background: var(--primary-color); color: #fff; }
+.fb-btn-primary:hover { background: var(--primary-hover); }
+.fb-btn-danger { background: #e41e3f; color: #fff; }
+.fb-btn-danger:hover { background: #c91a37; }

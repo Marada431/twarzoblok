@@ -1,0 +1,22 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   Nadpisania layoutu specyficzne dla strony głównej (index.php).
+   Ten plik musi być załadowany PO main.css, żeby kaskada działała poprawnie.
+   Nie modyfikuj tego pliku dla innych stron – używają one grid z layout.css.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* Ograniczenie rozmiaru SVG (navbar ikon) */
+svg { max-width: 24px; max-height: 24px; }
+
+/* Navbar – padding 15px zamiast 16px (oryginał inline z index.php) */
+.navbar { padding: 0 15px; }
+
+/* Flex layout kontenera – zastępuje grid z layout.css */
+.fb-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    max-width: 1200px;
+    margin: 70px auto 20px;
+    padding: 0 15px;
+    gap: 20px;
+}

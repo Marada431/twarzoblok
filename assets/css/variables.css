@@ -1,0 +1,28 @@
+:root {
+    --bg-main: #f0f4f1;         /* Jasne, lekko zielonkawe tło portalu */
+    --bg-surface: #ffffff;      /* Tło kart, postów, wiadomości */
+    --bg-hover: #e1ebe3;        /* Tło po najechaniu na elementy (delikatny zielony) */
+    --primary-color: #338336;   /* Główna, mocna zieleń TwarzBloku */
+    --primary-hover: #1b5e20;   /* Ciemniejsza zieleń po najechaniu */
+    --text-main: #1b1e1b;       /* Główny tekst (bardzo ciemna zieleń/czarny) */
+    --text-muted: #556056;      /* Tekst pomocniczy, daty, opisy */
+    --border-color: #d2ded4;    /* Granice i linie podziału */
+    --success: #4caf50;         /* Jasna zieleń (status online, rejestracja) */
+
+    --radius-main: 8px;         /* Zaokrąglenie kart */
+    --radius-round: 50%;        /* Do awatarów i przycisków kołowych */
+    --shadow: 0 1px 3px rgba(46, 125, 50, 0.1); /* Subtelny, zielonkawy cień */
+    --transition: all 0.2s ease-in-out;
+}
+
+/* Szybki Dark Mode dla TwarzBloku */
+body.dark-mode {
+    --bg-main: #121813;
+    --bg-surface: #1e2620;
+    --bg-hover: #2a362d;
+    --primary-color: #4caf50;
+    --primary-hover: #81c784;
+    --text-main: #e8ece9;
+    --text-muted: #9aa79c;
+    --border-color: #2d3b30;
+}

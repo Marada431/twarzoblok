@@ -1,0 +1,144 @@
+.navbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 70px;
+    background-color: var(--bg-surface);
+    box-shadow: var(--shadow);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 16px;
+    z-index: 1000;
+    border-bottom: 2px solid var(--primary-color); /* Charakterystyczny zielony pasek */
+}
+
+.navbar-brand {
+    font-weight: bold;
+    font-size: 22px;
+    color: var(--primary-color);
+    letter-spacing: -0.5px;
+}
+
+.navbar-links {
+    display: flex;
+    gap: 60px;
+    margin-left: -420px;
+    margin-top: 10px;
+}
+
+.navbar-links2 {
+    display: flex;
+    margin-left: -250px;
+    margin-top: 10px;
+}
+
+.navbar-links a svg {
+    width: 28px;
+    height: 28px;
+    fill: var(--primary-color);
+    transition: var(--transition);
+}
+
+.navbar-links a:hover svg {
+    fill: var(--primary-hover);
+}
+
+.suchemashine {
+    background-color: #f0f2f5;
+    border-radius: 50px;
+    border: 1px solid transparent;
+    height: 40px;
+    width: 240px;
+    padding: 0 16px 0 38px;
+    font-size: 15px;
+    color: #050505;
+    outline: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Cpath fill='%2365676b' d='M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0s208 93.1 208 208zM208 352a144 144 0 1 0 0-288 144 144 0 1 0 0 288z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: 14px center;
+    background-size: 16px;
+}
+
+.icon-wrapper {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 10px;
+    background-color: #dcd2d2;
+    border-radius: 100px;
+    padding: 10px 12px;
+    box-sizing: border-box;
+}
+
+.icon-wrapper svg {
+    width: 24px;
+    height: 24px;
+    display: block;
+}
+
+.avatar-navbar-wrapper {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--border-color, #e2e8f0);
+}
+
+.user-profile-dropdown {
+    position: relative;
+    display: inline-block;
+    padding-bottom: 6px;
+    margin-bottom: -6px;
+}
+
+.dropdown-menu-content {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: 52px;
+    width: 250px;
+    background-color: #ffffff;
+    min-width: 150px;
+    box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.15);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+/* "Mostek" nad menu - teraz jest solidny i biały */
+.dropdown-menu-content::before {
+    content: '';
+    position: absolute;
+    top: -10px; /* Wysokość dopasowana do szczeliny */
+    left: -1px; /* Wyrównanie do lewej ramki menu */
+    width: calc(100% + 2px); /* Rozszerzenie, żeby pokryć boczne ramki */
+    height: 10px;
+    background-color: #ffffff; /* ZMIENIONO: Stały biały kolor zamiast przezroczystego */
+    border-left: 1px solid #e2e8f0; /* Dodajemy boczne ramki do mostka */
+    border-right: 1px solid #e2e8f0;
+    border-top: 1px solid #e2e8f0; /* Górna krawędź menu */
+    border-radius: 8px 8px 0 0; /* Zaokrąglenie przeniesione na samą górę całego bloku */
+}
+
+/* Pojawienie się menu po najechaniu */
+.user-profile-dropdown:hover .dropdown-menu-content {
+    display: block;
+}
+
+.dropdown-item {
+    padding: 12px 16px;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    font-size: 14px;
+    position: relative;
+    justify-content: center;
+}
+
+.dropdown-item.logout-btn:hover {
+    color: #ef4444;
+}
