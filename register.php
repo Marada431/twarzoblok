@@ -1,5 +1,5 @@
 <?php
-// login.php – router MVC
+// register.php – router MVC
 session_start();
 
 if (isset($_SESSION['user_id'])) {
@@ -14,7 +14,7 @@ require_once __DIR__ . '/app/controllers/AuthController.php';
 $controller = new AuthController(db());
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $controller->handleLogin();
+    $controller->handleRegister();
 } else {
-    $controller->showLogin();
+    $controller->showRegister();
 }
