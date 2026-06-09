@@ -6,6 +6,8 @@
 
 session_start();
 require 'config/database.php';  // udostępnia db() → PDO
+require_once 'includes/csrf.php';
+require_once 'includes/auth_check.php';
 
 // ── OCHRONA ──────────────────────────────────────────────────
 if (!isset($_SESSION['user_id'])) {
@@ -13,6 +15,7 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 $user_id = (int) $_SESSION['user_id'];
+check_user_status(db(), $user_id);
 
 // ── ROUTING ──────────────────────────────────────────────────
 $allowed_pages = ['profil', 'adres', 'konto'];
@@ -33,6 +36,7 @@ define('UPLOAD_URL', 'uploads/avatars/');
 //  OBSŁUGA POST
 // ============================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    verify_csrf_token($_POST['csrf_token'] ?? '');
 
     // ────────────────────────────────────────────────────────
     //  POST: PROFIL
@@ -78,8 +82,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             elseif ($file['size'] > $maxSize)           $errs[] = 'Zdjęcie nie może przekraczać 3 MB.';
             else {
                 if (!is_dir(UPLOAD_DIR)) mkdir(UPLOAD_DIR, 0755, true);
-                $ext      = pathinfo($file['name'], PATHINFO_EXTENSION);
-                $filename = 'avatar_' . $user_id . '_' . time() . '.' . strtolower($ext);
+                $mime_to_ext = [
+                    'image/jpeg' => 'jpg',
+                    'image/png'  => 'png',
+                    'image/webp' => 'webp',
+                    'image/gif'  => 'gif',
+                ];
+                $ext      = $mime_to_ext[$mimeType];
+                $filename = 'avatar_' . $user_id . '_' . time() . '.' . $ext;
                 $destPath = UPLOAD_DIR . $filename;
 
                 if (move_uploaded_file($file['tmp_name'], $destPath)) {
@@ -306,6 +316,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $error) {
     <?php /* ════════════════════════ PROFIL ════════════════════════ */ ?>
     <?php if ($page === 'profil'): ?>
     <form method="post" action="?page=profil" enctype="multipart/form-data" novalidate>
+    <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>">
     <div class="card">
 
         <div class="card-header">
@@ -444,6 +455,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $error) {
     <?php /* ════════════════════════ ADRES ════════════════════════ */ ?>
     <?php elseif ($page === 'adres'): ?>
     <form method="post" action="?page=adres" novalidate>
+    <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>">
     <div class="card">
 
         <div class="card-header">
@@ -557,6 +569,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $error) {
                 </div>
 
                 <form method="post" action="?page=konto" novalidate>
+                <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>">
                 <div class="danger-zone-body">
 
                     <div class="form-group">

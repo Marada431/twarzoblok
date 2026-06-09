@@ -2,14 +2,20 @@ const { Server } = require('socket.io');
 const mysql = require('mysql2/promise');
 const crypto = require('crypto');
 
-const SECRET = 'bardzo_tajny_klucz_zmien_go'; // ten sam co w config/database.php
+// Uruchamiaj: node --env-file=../.env server.js  (Node.js >= 20.6)
+const SECRET = process.env.SOCKET_SECRET;
+if (!SECRET) {
+    console.error('Brak SOCKET_SECRET w zmiennych środowiskowych. Ustaw .env lub przekaż --env-file.');
+    process.exit(1);
+}
+
 const DB_CONFIG = {
-    host: 'localhost',
-    user: 'root',
-    password: '',
-    database: 'twarzobok',
+    host:             process.env.DB_HOST     || 'localhost',
+    user:             process.env.DB_USER     || 'root',
+    password:         process.env.DB_PASS     || '',
+    database:         process.env.DB_NAME     || '',
     waitForConnections: true,
-    connectionLimit: 10
+    connectionLimit:  10,
 };
 
 const pool = mysql.createPool(DB_CONFIG);

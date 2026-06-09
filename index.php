@@ -1,6 +1,8 @@
 <?php
 session_start();
 require_once 'config/database.php';
+require_once 'includes/csrf.php';
+require_once 'includes/auth_check.php';
 
 if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
     header('Location: login.php');
@@ -8,6 +10,7 @@ if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
 }
 
 $current_user_id = (int) $_SESSION['user_id'];
+check_user_status(db(), $current_user_id);
 
 // ─────────────────────────────────────────────
 // HELPERS
@@ -55,6 +58,7 @@ function createThumbnail(string $path, string $mime): void {
 // ─────────────────────────────────────────────
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_post'])) {
+    verify_csrf_token($_POST['csrf_token'] ?? '');
     $content   = trim($_POST['content'] ?? '');
     $max_files = 10;
     $allowed_mimes = ['image/jpeg'=>'jpg','image/png'=>'png','image/webp'=>'webp','image/gif'=>'gif','video/mp4'=>'mp4','video/webm'=>'webm'];
@@ -109,6 +113,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_post'])) {
 // ─────────────────────────────────────────────
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+    verify_csrf_token($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
     header('Content-Type: application/json');
     $action = $_POST['action'];
 
@@ -149,8 +154,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     if ($action === 'load_posts') {
         $offset = max(0, (int)($_POST['offset'] ?? 0));
         $posts  = fetchFeedPosts($current_user_id, $offset);
+        $batch  = batchLoadPostData($posts, $current_user_id);
         $html   = '';
-        foreach ($posts as $post) $html .= renderPost($post, $current_user_id);
+        foreach ($posts as $post) {
+            $html .= renderPost($post, $current_user_id, $batch[$post['post_id']] ?? []);
+        }
         echo json_encode(['success'=>true,'html'=>$html,'has_more'=>count($posts)===20]);
         exit;
     }
@@ -161,6 +169,94 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 // ─────────────────────────────────────────────
 // DANE: feed + sugestie + licznik zaproszeń
 // ─────────────────────────────────────────────
+
+/**
+ * Pobiera w 5 zapytaniach WSZYSTKIE dane dla tablicy postów (eliminacja N+1).
+ * Zwraca mapę: post_id → ['media', 'reactions', 'comments', 'total_comments']
+ */
+function batchLoadPostData(array $posts, int $uid): array {
+    if (empty($posts)) return [];
+    $pdo     = db();
+    $postIds = array_column($posts, 'post_id');
+    $phs     = implode(',', array_fill(0, count($postIds), '?'));
+
+    // 1. Media
+    $stmt = $pdo->prepare("SELECT media_id, post_id, media_type, file_url FROM post_media WHERE post_id IN ($phs) ORDER BY position ASC");
+    $stmt->execute($postIds);
+    $mediaByPost = [];
+    foreach ($stmt->fetchAll() as $m) { $mediaByPost[$m['post_id']][] = $m; }
+
+    // 2. Reakcje (zagregowane)
+    $stmt = $pdo->prepare("
+        SELECT post_id, reaction_type, COUNT(*) AS cnt,
+               MAX(CASE WHEN user_id = ? THEN 1 ELSE 0 END) AS is_mine
+        FROM post_reactions WHERE post_id IN ($phs)
+        GROUP BY post_id, reaction_type ORDER BY cnt DESC
+    ");
+    $stmt->execute(array_merge([$uid], $postIds));
+    $reactionsByPost = [];
+    foreach ($stmt->fetchAll() as $r) { $reactionsByPost[$r['post_id']][] = $r; }
+
+    // 3. Komentarze (wszystkie top-level) — slice do 5 w PHP
+    $stmt = $pdo->prepare("
+        SELECT c.comment_id, c.post_id, c.author_id, c.content, c.created_at, c.reply_to_user_id,
+               u.first_name, u.last_name, u.avatar_url,
+               (SELECT COUNT(*) FROM comments r WHERE r.parent_comment_id = c.comment_id) AS reply_count
+        FROM comments c
+        JOIN users u ON c.author_id = u.user_id
+        WHERE c.post_id IN ($phs) AND c.parent_comment_id IS NULL AND c.visibility_status = 'visible'
+        ORDER BY c.post_id ASC, c.created_at ASC
+    ");
+    $stmt->execute($postIds);
+    $commentsByPost = [];
+    foreach ($stmt->fetchAll() as $c) {
+        if (!isset($commentsByPost[$c['post_id']])) $commentsByPost[$c['post_id']] = [];
+        if (count($commentsByPost[$c['post_id']]) < 5) $commentsByPost[$c['post_id']][] = $c;
+    }
+
+    // 4. Liczba komentarzy
+    $stmt = $pdo->prepare("
+        SELECT post_id, COUNT(*) AS cnt FROM comments
+        WHERE post_id IN ($phs) AND parent_comment_id IS NULL AND visibility_status = 'visible'
+        GROUP BY post_id
+    ");
+    $stmt->execute($postIds);
+    $countByPost = [];
+    foreach ($stmt->fetchAll() as $row) { $countByPost[$row['post_id']] = (int)$row['cnt']; }
+
+    // 5. Reakcje na komentarze
+    $commentIds = [];
+    foreach ($commentsByPost as $comments) {
+        foreach ($comments as $c) { $commentIds[] = $c['comment_id']; }
+    }
+    $cmtReactions = [];
+    if (!empty($commentIds)) {
+        $cphs = implode(',', array_fill(0, count($commentIds), '?'));
+        $stmt = $pdo->prepare("
+            SELECT comment_id, reaction_type, COUNT(*) AS cnt,
+                   MAX(CASE WHEN user_id = ? THEN 1 ELSE 0 END) AS is_mine
+            FROM comment_reactions WHERE comment_id IN ($cphs)
+            GROUP BY comment_id, reaction_type
+        ");
+        $stmt->execute(array_merge([$uid], $commentIds));
+        foreach ($stmt->fetchAll() as $r) { $cmtReactions[$r['comment_id']][] = $r; }
+    }
+    foreach ($commentsByPost as $pid => &$comments) {
+        foreach ($comments as &$c) { $c['reactions'] = $cmtReactions[$c['comment_id']] ?? []; }
+    }
+    unset($comments, $c);
+
+    $result = [];
+    foreach ($postIds as $pid) {
+        $result[$pid] = [
+            'media'          => $mediaByPost[$pid]  ?? [],
+            'reactions'      => $reactionsByPost[$pid] ?? [],
+            'comments'       => $commentsByPost[$pid]  ?? [],
+            'total_comments' => $countByPost[$pid]      ?? 0,
+        ];
+    }
+    return $result;
+}
 
 function fetchFeedPosts(int $uid, int $offset, int $limit = 20): array {
     $pdo = db();
@@ -325,51 +421,58 @@ function renderCommentReactions(array $reactions, int $comment_id): string {
 }
 
 function renderComment(array $c, bool $is_reply = false): string {
-    $cid    = (int)$c['comment_id'];
-    $name   = htmlspecialchars($c['first_name'] . ' ' . $c['last_name']);
-    $time   = relativeTime($c['created_at']);
-    $text   = nl2br(htmlspecialchars($c['content']));
-    $avatar = !empty($c['avatar_url'])
-        ? "<img src=\"" . htmlspecialchars($c['avatar_url']) . "\" alt=\"Avatar\" loading=\"lazy\">"
-        : '<span class="cmt-av-ph">👤</span>';
+    $cid         = (int)$c['comment_id'];
+    $author_id   = (int)$c['author_id'];
+    $name        = htmlspecialchars($c['first_name'] . ' ' . $c['last_name']);
+    $time        = relativeTime($c['created_at']);
+    $text        = nl2br(htmlspecialchars($c['content']));
     $reply_count = (int)($c['reply_count'] ?? 0);
-
-    $reply_mention = '';
-    if (!empty($c['reply_to_username'])) {
-        $ru = htmlspecialchars($c['reply_to_username']);
-        $reply_mention = "<a class=\"reply-mention\" href=\"#\">@$ru</a> ";
-    }
-
+    $indent      = $is_reply ? ' reply-comment' : '';
     $reactions_html = isset($c['reactions']) ? renderCommentReactions($c['reactions'], $cid) : '';
-    $indent = $is_reply ? ' reply-comment' : '';
-    $author_id = (int)$c['author_id'];
 
-    $html  = "<div class=\"comment-item$indent\" id=\"comment-$cid\" data-comment-id=\"$cid\" data-author-id=\"$author_id\">";
-    $html .= "<div class=\"cmt-avatar\">$avatar</div>";
-    $html .= "<div class=\"cmt-body\">";
-    $html .= "<div class=\"cmt-bubble\">";
-    $html .= "<span class=\"cmt-author\">$name</span>";
-    $html .= "<span class=\"cmt-text\">$reply_mention$text</span>";
-    $html .= "</div>";
-    $html .= "<div class=\"cmt-meta\">";
-    $html .= $reactions_html;
-    $html .= "<button class=\"cmt-action-btn reply-btn\" data-comment-id=\"$cid\" data-author-id=\"$author_id\" data-author-name=\"" . htmlspecialchars($c['first_name'] . ' ' . $c['last_name']) . "\">Odpowiedz</button>";
-    $html .= "<span class=\"cmt-time\">$time</span>";
-    $html .= "</div>";
-
-    if (!$is_reply && $reply_count > 0) {
-        $html .= "<div class=\"replies-container\" id=\"replies-$cid\" data-loaded=\"0\">";
-        $html .= "<button class=\"load-replies-btn\" data-comment-id=\"$cid\" data-count=\"$reply_count\">Zobacz $reply_count odpowiedzi</button>";
-        $html .= "</div>";
-    } elseif (!$is_reply) {
-        $html .= "<div class=\"replies-container\" id=\"replies-$cid\" data-loaded=\"0\"></div>";
-    }
-
-    $html .= "</div></div>";
-    return $html;
+    ob_start(); ?>
+<div class="comment-item<?= $indent ?>" id="comment-<?= $cid ?>"
+     data-comment-id="<?= $cid ?>" data-author-id="<?= $author_id ?>">
+    <div class="cmt-avatar">
+        <?php if (!empty($c['avatar_url'])): ?>
+            <img src="<?= htmlspecialchars($c['avatar_url']) ?>" alt="Avatar" loading="lazy">
+        <?php else: ?>
+            <span class="cmt-av-ph">👤</span>
+        <?php endif; ?>
+    </div>
+    <div class="cmt-body">
+        <div class="cmt-bubble">
+            <span class="cmt-author"><?= $name ?></span>
+            <span class="cmt-text">
+                <?php if (!empty($c['reply_to_username'])): ?>
+                    <a class="reply-mention" href="#">@<?= htmlspecialchars($c['reply_to_username']) ?></a>
+                <?php endif; ?>
+                <?= $text ?>
+            </span>
+        </div>
+        <div class="cmt-meta">
+            <?= $reactions_html ?>
+            <button class="cmt-action-btn reply-btn"
+                    data-comment-id="<?= $cid ?>"
+                    data-author-id="<?= $author_id ?>"
+                    data-author-name="<?= $name ?>">Odpowiedz</button>
+            <span class="cmt-time"><?= $time ?></span>
+        </div>
+        <?php if (!$is_reply && $reply_count > 0): ?>
+            <div class="replies-container" id="replies-<?= $cid ?>" data-loaded="0">
+                <button class="load-replies-btn"
+                        data-comment-id="<?= $cid ?>"
+                        data-count="<?= $reply_count ?>">Zobacz <?= $reply_count ?> odpowiedzi</button>
+            </div>
+        <?php elseif (!$is_reply): ?>
+            <div class="replies-container" id="replies-<?= $cid ?>" data-loaded="0"></div>
+        <?php endif; ?>
+    </div>
+</div>
+    <?php return ob_get_clean();
 }
 
-function renderPost(array $post, int $uid): string {
+function renderPost(array $post, int $uid, array $preloaded = []): string {
     $pid        = (int)$post['post_id'];
     $name       = htmlspecialchars($post['first_name'] . ' ' . $post['last_name']);
     $time       = relativeTime($post['created_at']);
@@ -380,10 +483,11 @@ function renderPost(array $post, int $uid): string {
         ? "<img src=\"" . htmlspecialchars($avatar_url) . "\" alt=\"Avatar\">"
         : '<div class="placeholder-svg"><svg><use xlink:href="./icons/symbol-defs.svg#icon-user"></use></svg></div>';
 
-    $media      = fetchPostMedia($pid);
-    $reactions  = fetchPostReactions($pid, $uid);
-    $comments   = fetchInitialComments($pid, $uid);
-    $total_cmt  = fetchTotalComments($pid);
+    // Używaj pre-załadowanych danych (batch) lub fallback do pojedynczych zapytań
+    $media     = $preloaded['media']          ?? fetchPostMedia($pid);
+    $reactions = $preloaded['reactions']      ?? fetchPostReactions($pid, $uid);
+    $comments  = $preloaded['comments']       ?? fetchInitialComments($pid, $uid);
+    $total_cmt = $preloaded['total_comments'] ?? fetchTotalComments($pid);
 
     $emoji_map = ['like'=>'👍','love'=>'❤️','hug'=>'🤗','haha'=>'😆','wow'=>'😮','sad'=>'😢','angry'=>'😡'];
     $labels    = ['like'=>'Lubię to','love'=>'Super','hug'=>'Trzymaj się','haha'=>'Haha','wow'=>'Wow','sad'=>'Smutne','angry'=>'Złość'];
@@ -410,7 +514,10 @@ function renderPost(array $post, int $uid): string {
         <div class="post-options-dropdown">
             <div class="post-options-trigger"><svg><use xlink:href="./icons/symbol-defs.svg#icon-list2"></use></svg></div>
             <div class="post-options-menu">
-                <a href="javascript:void(0)" class="post-options-item" onclick="openModal('edit',<?= $pid ?>,'<?= urlencode(html_entity_decode($post['content'])) ?>')">Edytuj</a>
+                <a href="javascript:void(0)"
+                   class="post-options-item edit-post-trigger"
+                   data-post-id="<?= $pid ?>"
+                   data-post-content="<?= htmlspecialchars($post['content'], ENT_QUOTES, 'UTF-8') ?>">Edytuj</a>
                 <a href="javascript:void(0)" class="post-options-item danger" onclick="openModal('delete',<?= $pid ?>)">Usuń</a>
                 <a href="javascript:void(0)" class="post-options-item" onclick="openModal('report',<?= $pid ?>)">Zgłoś</a>
             </div>
@@ -526,7 +633,8 @@ $pending_stmt = db()->prepare("SELECT COUNT(*) FROM friendships WHERE addressee_
 $pending_stmt->execute([':uid' => $current_user_id]);
 $pending_count = (int)$pending_stmt->fetchColumn();
 
-$initial_posts = fetchFeedPosts($current_user_id, 0);
+$initial_posts  = fetchFeedPosts($current_user_id, 0);
+$initial_batch  = batchLoadPostData($initial_posts, $current_user_id);
 $has_more_posts = count($initial_posts) === 20;
 ?>
 <!doctype html>
@@ -540,47 +648,7 @@ $has_more_posts = count($initial_posts) === 20;
 </head>
 <body>
 
-<!-- NAVBAR -->
-<nav class="navbar">
-    <div class="navbar-brand">TwarzBlok
-        <input class="suchemashine" type="text" placeholder="Szukaj na TwarzBlok">
-    </div>
-    <div class="navbar-links">
-        <a href="index.php"><svg><use xlink:href="./icons/symbol-defs.svg#icon-home"></use></svg></a>
-        <a href="games.php"><svg><use xlink:href="./icons/symbol-defs.svg#icon-film"></use></svg></a>
-        <a href="friend_requests.php" style="position:relative;display:inline-flex;align-items:center;">
-            <svg><use xlink:href="./icons/symbol-defs.svg#icon-users"></use></svg>
-            <span id="pending-friends-count" class="friend-badge" style="<?= $pending_count === 0 ? 'display:none' : '' ?>"><?= $pending_count ?></span>
-        </a>
-        <a href="#"><svg><use xlink:href="./icons/symbol-defs.svg#icon-briefcase"></use></svg></a>
-        <a href="chat.php"><svg><use xlink:href="./icons/symbol-defs.svg#icon-bubbles4"></use></svg></a>
-    </div>
-    <div class="navbar-links2">
-        <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'admin'): ?>
-            <a href="admin_panel.php" title="Panel Administratora">
-                <div class="icon-wrapper" style="background:rgba(230,57,70,.1);color:#e63946;">
-                    <svg style="fill:currentColor"><use xlink:href="./icons/symbol-defs.svg#icon-list2"></use></svg>
-                </div>
-            </a>
-        <?php endif; ?>
-        <a href="#"><div class="icon-wrapper"><svg><use xlink:href="./icons/symbol-defs.svg#icon-list2"></use></svg></div></a>
-        <a href="#"><div class="icon-wrapper"><svg><use xlink:href="./icons/symbol-defs.svg#icon-bubbles2"></use></svg></div></a>
-        <a href="#"><div class="icon-wrapper"><svg><use xlink:href="./icons/symbol-defs.svg#icon-bell"></use></svg></div></a>
-        <div class="user-profile-dropdown">
-            <div class="avatar-navbar-wrapper">
-                <?php if (!empty($_SESSION['avatar_url'])): ?>
-                    <img src="<?= htmlspecialchars($_SESSION['avatar_url']) ?>" alt="Profil" style="width:100%;height:100%;object-fit:cover;">
-                <?php else: ?>
-                    <svg style="width:24px;height:24px;"><use xlink:href="./icons/symbol-defs.svg#icon-user"></use></svg>
-                <?php endif; ?>
-            </div>
-            <div class="dropdown-menu-content">
-                <a href="settings.php" class="dropdown-item settings-btn"><svg><use xlink:href="./icons/symbol-defs.svg#icon-user"></use></svg> Ustawienia</a>
-                <a href="logout.php" class="dropdown-item logout-btn"><svg><use xlink:href="./icons/symbol-defs.svg#icon-user"></use></svg> Wyloguj się</a>
-            </div>
-        </div>
-    </div>
-</nav>
+<?php $nav_pending_count = $pending_count; $nav_active = 'feed'; require_once __DIR__ . '/includes/navbar.php'; ?>
 
 <div class="fb-container">
 
@@ -601,6 +669,7 @@ $has_more_posts = count($initial_posts) === 20;
         <!-- Formularz nowego posta -->
         <div class="post-form-card">
             <form method="POST" action="" enctype="multipart/form-data" id="post-form">
+                <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>">
                 <div class="post-create-top">
                     <div class="av-wrap">
                         <?php if (!empty($_SESSION['avatar_url'])): ?>
@@ -671,7 +740,7 @@ $has_more_posts = count($initial_posts) === 20;
         <div id="feed-container">
             <?php if (!empty($initial_posts)): ?>
                 <?php foreach ($initial_posts as $post): ?>
-                    <?= renderPost($post, $current_user_id) ?>
+                    <?= renderPost($post, $current_user_id, $initial_batch[$post['post_id']] ?? []) ?>
                 <?php endforeach; ?>
             <?php else: ?>
                 <p style="text-align:center;color:var(--text-muted);padding:30px 0">Brak postów do wyświetlenia. Dodaj znajomych lub opublikuj coś!</p>
@@ -711,6 +780,7 @@ $has_more_posts = count($initial_posts) === 20;
         <div class="fb-modal-header"><h3>Edytuj post</h3><button class="fb-modal-close" onclick="closeModal('edit')">&times;</button></div>
         <form action="post_actions.php" method="POST">
             <div class="fb-modal-body">
+                <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>">
                 <input type="hidden" name="action" value="edit">
                 <input type="hidden" name="post_id" id="edit-post-id">
                 <textarea name="content" id="edit-post-content" class="fb-modal-textarea" required></textarea>
@@ -728,6 +798,7 @@ $has_more_posts = count($initial_posts) === 20;
         <div class="fb-modal-header"><h3>Usunąć post?</h3><button class="fb-modal-close" onclick="closeModal('delete')">&times;</button></div>
         <form action="post_actions.php" method="POST">
             <div class="fb-modal-body">
+                <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>">
                 <input type="hidden" name="action" value="delete">
                 <input type="hidden" name="post_id" id="delete-post-id">
                 <p>Czy na pewno chcesz usunąć ten post? Tej operacji nie można cofnąć.</p>
@@ -745,6 +816,7 @@ $has_more_posts = count($initial_posts) === 20;
         <div class="fb-modal-header"><h3>Zgłoś post</h3><button class="fb-modal-close" onclick="closeModal('report')">&times;</button></div>
         <form action="post_actions.php" method="POST">
             <div class="fb-modal-body">
+                <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>">
                 <input type="hidden" name="action" value="report">
                 <input type="hidden" name="post_id" id="report-post-id">
                 <p style="margin-bottom:12px;color:var(--text-muted)">Wybierz powód zgłoszenia:</p>
@@ -761,440 +833,32 @@ $has_more_posts = count($initial_posts) === 20;
     </div>
 </div>
 
-<script>
-// ── Emoji map ──
-const EMOJI_MAP = {like:'👍',love:'❤️',hug:'🤗',haha:'😆',wow:'😮',sad:'😢',angry:'😡'};
-const EMOJI_LABEL = {like:'Lubię to',love:'Super',hug:'Trzymaj się',haha:'Haha',wow:'Wow',sad:'Smutne',angry:'Złość'};
-
-// ── Media preview (multi-file) ──
-function previewMedia(event) {
-    const container = document.getElementById('media-preview-container');
-    const grid = document.getElementById('media-preview-grid');
-    grid.innerHTML = '';
-    const files = event.target.files;
-    if (!files || files.length === 0) { container.style.display = 'none'; return; }
-    container.style.display = 'block';
-    Array.from(files).slice(0, 10).forEach((file, i) => {
-        const item = document.createElement('div');
-        item.className = 'media-preview-item';
-        const rm = document.createElement('button');
-        rm.type = 'button'; rm.className = 'rm-preview'; rm.textContent = '✕';
-        rm.onclick = () => item.remove();
-        if (file.type.startsWith('video/')) {
-            const v = document.createElement('video');
-            v.src = URL.createObjectURL(file); v.muted = true;
-            item.appendChild(v);
-        } else {
-            const img = document.createElement('img');
-            img.src = URL.createObjectURL(file);
-            item.appendChild(img);
-        }
-        item.appendChild(rm);
-        grid.appendChild(item);
-    });
-}
-
-// ── Lightbox ──
-let lbMedia = [], lbIdx = 0;
-function openLightbox(galleryEl, startIdx) {
-    try { lbMedia = JSON.parse(galleryEl.dataset.media); } catch(e) { return; }
-    lbIdx = startIdx;
-    document.getElementById('lightbox').classList.add('active');
-    showLbMedia();
-}
-function showLbMedia() {
-    const m = lbMedia[lbIdx];
-    const img = document.getElementById('lb-img');
-    const vid = document.getElementById('lb-video');
-    const ctr = document.getElementById('lb-counter');
-    img.style.display = 'none'; vid.style.display = 'none';
-    if (m.type === 'video') { vid.src = m.url; vid.style.display = 'block'; }
-    else { img.src = m.url; img.style.display = 'block'; }
-    ctr.textContent = lbMedia.length > 1 ? `${lbIdx+1} / ${lbMedia.length}` : '';
-    document.querySelector('.lightbox-prev').style.display = lbMedia.length > 1 ? 'flex' : 'none';
-    document.querySelector('.lightbox-next').style.display = lbMedia.length > 1 ? 'flex' : 'none';
-}
-function lightboxNav(dir) {
-    lbIdx = (lbIdx + dir + lbMedia.length) % lbMedia.length;
-    showLbMedia();
-}
-function closeLightbox() {
-    document.getElementById('lightbox').classList.remove('active');
-    const vid = document.getElementById('lb-video');
-    vid.pause(); vid.src = '';
-}
-document.addEventListener('keydown', e => {
-    if (!document.getElementById('lightbox').classList.contains('active')) return;
-    if (e.key === 'ArrowLeft') lightboxNav(-1);
-    else if (e.key === 'ArrowRight') lightboxNav(1);
-    else if (e.key === 'Escape') closeLightbox();
-});
-
-// ── Reakcje na posty ──
-async function toggleReaction(postId, type) {
-    const btn   = document.getElementById('react-btn-' + postId);
-    const current = btn.dataset.userReaction;
-    const newType = (current === type) ? null : type;
-
-    const res = await fetch('reactions/toggle.php', {
-        method: 'POST',
-        headers: {'Content-Type':'application/x-www-form-urlencoded'},
-        body: `type=${encodeURIComponent(type)}&post_id=${postId}`
-    });
-    const data = await res.json();
-    if (!data.success) return;
-
-    // Aktualizuj stan przycisku
-    const userReaction = data.user_reaction;
-    btn.dataset.userReaction = userReaction || '';
-    btn.className = userReaction ? 'action-btn active-reacted' : 'action-btn';
-    document.getElementById('react-btn-text-' + postId).textContent =
-        userReaction ? (EMOJI_MAP[userReaction] + ' ' + EMOJI_LABEL[userReaction]) : 'Reakcja';
-
-    // Aktualizuj badges
-    const summary = document.getElementById('react-summary-' + postId);
-    let html = '';
-    for (const [t, cnt] of Object.entries(data.counts)) {
-        if (cnt > 0) {
-            const mine = (t === userReaction) ? ' mine' : '';
-            html += `<span class="reaction-badge${mine}" title="${EMOJI_LABEL[t]}">${EMOJI_MAP[t]} <b>${cnt}</b></span>`;
-        }
-    }
-    summary.innerHTML = html;
-}
-
-// ── Reakcje na komentarze ──
-document.addEventListener('click', async function(e) {
-    const btn = e.target.closest('.comment-pick-emoji');
-    if (!btn) return;
-    const type = btn.dataset.type;
-    const cid  = btn.dataset.commentId;
-
-    const res = await fetch('reactions/toggle.php', {
-        method: 'POST',
-        headers: {'Content-Type':'application/x-www-form-urlencoded'},
-        body: `type=${encodeURIComponent(type)}&comment_id=${cid}`
-    });
-    const data = await res.json();
-    if (!data.success) return;
-
-    const container = document.querySelector(`.comment-reactions[data-comment-id="${cid}"]`);
-    if (!container) return;
-
-    // Odśwież badges (zostawiamy picker)
-    container.querySelectorAll('.comment-reaction-badge').forEach(el => el.remove());
-    const picker = container.querySelector('.comment-reaction-picker');
-    const frag = [];
-    for (const [t, cnt] of Object.entries(data.counts)) {
-        if (cnt > 0) {
-            const mine = (t === data.user_reaction) ? ' mine' : '';
-            frag.push(`<span class="comment-reaction-badge${mine}" data-type="${t}" title="${EMOJI_LABEL[t]}">${EMOJI_MAP[t]} ${cnt}</span>`);
-        }
-    }
-    picker.insertAdjacentHTML('beforebegin', frag.join(''));
-});
-
-// ── Komentarze ──
-function toggleComments(postId) {
-    const sec = document.getElementById('comments-' + postId);
-    sec.style.display = sec.style.display === 'none' ? 'block' : 'none';
-}
-
-// Złóż komentarz / odpowiedź
-document.addEventListener('submit', async function(e) {
-    const form = e.target.closest('.comment-form');
-    if (!form) return;
-    e.preventDefault();
-
-    const postId  = form.dataset.postId;
-    const input   = form.querySelector('.comment-input');
-    const content = input.value.trim();
-    if (!content) return;
-
-    const parentId    = form.querySelector('[name=parent_comment_id]').value;
-    const replyToId   = form.querySelector('[name=reply_to_user_id]').value;
-
-    const fd = new FormData();
-    fd.append('action', 'comment');
-    fd.append('post_id', postId);
-    fd.append('comment_content', content);
-    fd.append('parent_comment_id', parentId);
-    fd.append('reply_to_user_id', replyToId);
-
-    const res  = await fetch('post_actions.php', { method:'POST', body: fd });
-    const data = await res.json();
-    if (!data.success) { alert(data.message || 'Błąd.'); return; }
-
-    input.value = '';
-    cancelReply(form);
-
-    const avatarHtml = data.user_avatar
-        ? `<img src="${data.user_avatar}" alt="Avatar" loading="lazy">`
-        : `<span class="cmt-av-ph">👤</span>`;
-
-    const replyMention = data.reply_to_username
-        ? `<a class="reply-mention" href="#">@${data.reply_to_username}</a> `
-        : '';
-
-    const newCmt = `
-        <div class="comment-item ${data.parent_comment_id ? 'reply-comment' : ''}" id="comment-${data.comment_id}" data-comment-id="${data.comment_id}">
-            <div class="cmt-avatar">${avatarHtml}</div>
-            <div class="cmt-body">
-                <div class="cmt-bubble">
-                    <span class="cmt-author">${data.user_name}</span>
-                    <span class="cmt-text">${replyMention}${escHtml(data.content)}</span>
-                </div>
-                <div class="cmt-meta">
-                    <div class="comment-reactions" data-comment-id="${data.comment_id}">
-                        <div class="comment-reaction-picker" data-comment-id="${data.comment_id}">
-                            ${Object.entries(EMOJI_MAP).map(([t,e])=>`<span class="comment-pick-emoji" data-type="${t}" data-comment-id="${data.comment_id}" title="${EMOJI_LABEL[t]}">${e}</span>`).join('')}
-                        </div>
-                    </div>
-                    <button class="cmt-action-btn reply-btn"
-                            data-comment-id="${data.comment_id}"
-                            data-author-id="${data.author_id || ''}"
-                            data-author-name="${data.user_name}">Odpowiedz</button>
-                    <span class="cmt-time">przed chwilą</span>
-                </div>
-                <div class="replies-container" id="replies-${data.comment_id}" data-loaded="0"></div>
-            </div>
-        </div>`;
-
-    if (data.parent_comment_id) {
-        const repliesBox = document.getElementById('replies-' + data.parent_comment_id);
-        if (repliesBox) repliesBox.insertAdjacentHTML('beforeend', newCmt);
-    } else {
-        const list = document.getElementById('comments-list-' + postId);
-        if (list) list.insertAdjacentHTML('afterbegin', newCmt);
-        // Zaktualizuj licznik
-        const cntEl = document.getElementById('cmt-count-' + postId);
-        if (cntEl) {
-            const m = cntEl.textContent.match(/\d+/);
-            const n = m ? parseInt(m[0]) + 1 : 1;
-            cntEl.textContent = `Komentarz (${n})`;
-        }
-    }
-});
-
-// Kliknięcie "Odpowiedz"
-document.addEventListener('click', function(e) {
-    const btn = e.target.closest('.reply-btn');
-    if (!btn) return;
-
-    const commentId  = btn.dataset.commentId;
-    const authorId   = btn.dataset.authorId;
-    const authorName = btn.dataset.authorName;
-
-    // Znajdź formularz w tym samym posts card
-    const card = btn.closest('.post-feed-card');
-    if (!card) return;
-    const form = card.querySelector('.comment-form');
-    if (!form) return;
-
-    form.querySelector('[name=parent_comment_id]').value = commentId;
-    form.querySelector('[name=reply_to_user_id]').value  = authorId;
-
-    const indicator = form.querySelector('.reply-indicator');
-    form.querySelector('.reply-label').textContent = 'Odpowiadasz: @' + authorName;
-    indicator.style.display = 'flex';
-
-    const input = form.querySelector('.comment-input');
-    input.placeholder = '@' + authorName + ' ';
-    input.focus();
-
-    // Pokaż sekcję komentarzy jeśli ukryta
-    const section = form.closest('.comments-section');
-    if (section) section.style.display = 'block';
-});
-
-function cancelReply(form) {
-    form.querySelector('[name=parent_comment_id]').value = '';
-    form.querySelector('[name=reply_to_user_id]').value  = '';
-    form.querySelector('.reply-indicator').style.display = 'none';
-    form.querySelector('.comment-input').placeholder = 'Napisz komentarz…';
-}
-
-// Ładuj odpowiedzi
-document.addEventListener('click', async function(e) {
-    const btn = e.target.closest('.load-replies-btn');
-    if (!btn) return;
-    btn.disabled = true;
-    btn.textContent = 'Ładowanie…';
-
-    const commentId = btn.dataset.commentId;
-    const postId    = btn.closest('.post-feed-card').id.replace('post-', '');
-
-    const res  = await fetch(`comments_load.php?post_id=${postId}&parent_id=${commentId}`);
-    const data = await res.json();
-    if (!data.success) { btn.disabled = false; return; }
-
-    const container = document.getElementById('replies-' + commentId);
-    container.innerHTML = '';
-    data.comments.forEach(c => { container.insertAdjacentHTML('beforeend', buildCommentHTML(c)); });
-    btn.remove();
-    container.dataset.loaded = '1';
-});
-
-// Załaduj więcej komentarzy głównych
-document.addEventListener('click', async function(e) {
-    const btn = e.target.closest('.load-more-comments-btn');
-    if (!btn) return;
-    btn.disabled = true;
-    btn.textContent = 'Ładowanie…';
-
-    const postId = btn.dataset.postId;
-    const offset = parseInt(btn.dataset.offset);
-    const total  = parseInt(btn.dataset.total);
-
-    const res  = await fetch(`comments_load.php?post_id=${postId}&offset=${offset}`);
-    const data = await res.json();
-    if (!data.success) { btn.disabled = false; return; }
-
-    const list = document.getElementById('comments-list-' + postId);
-    data.comments.forEach(c => { list.insertAdjacentHTML('beforeend', buildCommentHTML(c)); });
-
-    const newOffset = offset + data.comments.length;
-    if (data.has_more) {
-        btn.dataset.offset = newOffset;
-        btn.disabled = false;
-        btn.textContent = `Pokaż więcej komentarzy (${total - newOffset} pozostałych)`;
-    } else {
-        btn.remove();
-    }
-});
-
-// Buduj HTML komentarza z danych JSON
-function buildCommentHTML(c) {
-    const avatarHtml = c.author_avatar
-        ? `<img src="${escHtml(c.author_avatar)}" alt="Avatar" loading="lazy">`
-        : `<span class="cmt-av-ph">👤</span>`;
-
-    const replyMention = c.reply_to_username
-        ? `<a class="reply-mention" href="#">@${escHtml(c.reply_to_username)}</a> `
-        : '';
-
-    const replyClass = c.is_reply ? ' reply-comment' : '';
-
-    let reactBadges = '';
-    (c.reactions || []).forEach(r => {
-        if (r.cnt > 0) {
-            const mine = r.is_mine ? ' mine' : '';
-            reactBadges += `<span class="comment-reaction-badge${mine}" data-type="${r.reaction_type}" title="${EMOJI_LABEL[r.reaction_type]}">${EMOJI_MAP[r.reaction_type]} ${r.cnt}</span>`;
-        }
-    });
-
-    const pickerEmojis = Object.entries(EMOJI_MAP).map(([t,e]) =>
-        `<span class="comment-pick-emoji" data-type="${t}" data-comment-id="${c.comment_id}" title="${EMOJI_LABEL[t]}">${e}</span>`
-    ).join('');
-
-    let repliesHTML = '';
-    if (!c.is_reply && c.reply_count > 0) {
-        repliesHTML = `<div class="replies-container" id="replies-${c.comment_id}" data-loaded="0">
-            <button class="load-replies-btn" data-comment-id="${c.comment_id}" data-count="${c.reply_count}">Zobacz ${c.reply_count} odpowiedzi</button>
-        </div>`;
-    } else if (!c.is_reply) {
-        repliesHTML = `<div class="replies-container" id="replies-${c.comment_id}" data-loaded="0"></div>`;
-    }
-
-    return `<div class="comment-item${replyClass}" id="comment-${c.comment_id}" data-comment-id="${c.comment_id}">
-        <div class="cmt-avatar">${avatarHtml}</div>
+<!-- Template komentarza – Problem 7 -->
+<template id="comment-tpl">
+    <div class="comment-item">
+        <div class="cmt-avatar"></div>
         <div class="cmt-body">
             <div class="cmt-bubble">
-                <span class="cmt-author">${escHtml(c.author_name)}</span>
-                <span class="cmt-text">${replyMention}${escHtml(c.content).replace(/\n/g,'<br>')}</span>
+                <span class="cmt-author"></span>
+                <span class="cmt-text"></span>
             </div>
             <div class="cmt-meta">
-                <div class="comment-reactions" data-comment-id="${c.comment_id}">
-                    ${reactBadges}
-                    <div class="comment-reaction-picker" data-comment-id="${c.comment_id}">${pickerEmojis}</div>
+                <div class="comment-reactions">
+                    <div class="comment-reaction-picker"></div>
                 </div>
-                <button class="cmt-action-btn reply-btn"
-                        data-comment-id="${c.comment_id}"
-                        data-author-id="${c.author_id}"
-                        data-author-name="${escHtml(c.author_name)}">Odpowiedz</button>
-                <span class="cmt-time">${escHtml(c.created_at_rel)}</span>
+                <button class="cmt-action-btn reply-btn">Odpowiedz</button>
+                <span class="cmt-time"></span>
             </div>
-            ${repliesHTML}
+            <div class="replies-container"></div>
         </div>
-    </div>`;
-}
+    </div>
+</template>
 
-// ── Load more posts ──
-const loadMoreBtn = document.getElementById('load-more-posts-btn');
-if (loadMoreBtn) {
-    loadMoreBtn.addEventListener('click', async function() {
-        this.disabled = true;
-        document.getElementById('feed-spinner').style.display = 'block';
-
-        const res = await fetch('index.php', {
-            method: 'POST',
-            headers: {'Content-Type':'application/x-www-form-urlencoded'},
-            body: 'action=load_posts&offset=' + this.dataset.offset
-        });
-        const data = await res.json();
-
-        document.getElementById('feed-spinner').style.display = 'none';
-        if (data.html) {
-            document.getElementById('feed-container').insertAdjacentHTML('beforeend', data.html);
-            this.dataset.offset = parseInt(this.dataset.offset) + 20;
-        }
-        if (!data.has_more) { this.remove(); return; }
-        this.disabled = false;
-    });
-}
-
-// ── Modals ──
-function openModal(type, postId, encodedContent) {
-    document.getElementById(type + '-post-id').value = postId;
-    if (type === 'edit' && encodedContent) {
-        document.getElementById('edit-post-content').value = decodeURIComponent(encodedContent.replace(/\+/g,' '));
-    }
-    document.getElementById('modal-' + type).style.display = 'flex';
-}
-function closeModal(type) {
-    document.getElementById('modal-' + type).style.display = 'none';
-}
-window.onclick = function(e) {
-    if (e.target.classList.contains('fb-modal-overlay')) e.target.style.display = 'none';
-};
-
-// ── Karuzela ──
-function scrollCarousel(dir) {
-    document.getElementById('suggestionsCarousel')?.scrollBy({left: dir * 200, behavior:'smooth'});
-}
-
-// ── Znajomi ──
-async function addFriend(id, btn) {
-    if (btn.disabled) return;
-    btn.disabled = true; btn.textContent = '…';
-    const res  = await fetch('index.php', {method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:`action=add_friend&target_user_id=${id}`});
-    const data = await res.json();
-    if (data.success) { btn.textContent = '✓ Wysłano'; btn.style.background = '#42b72a'; }
-    else { alert(data.message); btn.disabled = false; btn.textContent = 'Dodaj'; }
-}
-async function removeSuggestion(id, btn) {
-    const card = btn.closest('.suggestion-card');
-    await fetch('index.php', {method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:`action=remove_suggestion&target_user_id=${id}`});
-    if (card) { card.style.opacity = '0'; card.style.transition = 'opacity .3s'; setTimeout(()=>card.remove(), 300); }
-}
-
-// ── Licznik zaproszeń ──
-async function updatePendingCount() {
-    const res  = await fetch('index.php', {method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'action=get_pending_count'});
-    const data = await res.json();
-    if (!data.success) return;
-    const badge = document.getElementById('pending-friends-count');
-    if (!badge) return;
-    badge.textContent = data.count;
-    badge.style.display = data.count > 0 ? 'flex' : 'none';
-}
-setInterval(updatePendingCount, 15000);
-
-// ── Helpers ──
-function escHtml(str) {
-    if (!str) return '';
-    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
+<link rel="stylesheet" href="assets/css/toast.css">
+<script src="assets/js/toast.js"></script>
+<script>
+const APP_CONFIG = { csrfToken: '<?= generate_csrf_token() ?>' };
 </script>
+<script src="assets/js/feed.js"></script>
 </body>
 </html>

@@ -1,67 +1,31 @@
+<?php
+session_start();
+require_once __DIR__ . '/config/error_handler.php';
+if (!isset($_SESSION['user_id'])) {
+    header('Location: login.php');
+    exit;
+}
+// Tymczasowa strona – funkcja gier w budowie
+?>
 <!DOCTYPE html>
 <html lang="pl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TwarzBlok - Strefa Gier i Rywalizacji</title>
+    <title>TwarzBlok - Strefa Gier</title>
     <link rel="stylesheet" href="assets/css/main.css">
 </head>
 <body>
-
 <nav class="navbar">
-    <div class="navbar-brand">TwarzBlok 🎮</div>
+    <div class="navbar-brand"><a href="index.php" style="text-decoration:none;color:inherit;">TwarzBlok</a></div>
     <div class="navbar-links">
-        <a href="index.php">🏠 Dom</a>
-        <a href="gra.html"><b>Gry</b></a>
+        <a href="index.php"><svg><use xlink:href="./icons/symbol-defs.svg#icon-home"></use></svg></a>
     </div>
-    <div><a href="index.php" class="btn btn-secondary">Powrót</a></div>
 </nav>
-
-<div class="fb-container game-layout">
-
-    <main class="game-zone">
-        <div class="card">
-            <h2>🎮 Arena Mini-Gier</h2>
-            <p class="text-muted">Rywalizuj na żywo z osobami na czacie portalu TwarzBlok!</p>
-
-            <div class="game-screen">
-                <p>串 [ Miejsce na grę w JS ] 串</p>
-                <button class="btn btn-primary">KLIKNIJ ABY ZDOBYĆ PKT!</button>
-            </div>
-
-            <h3>🏆 Tabela liderów pokoju</h3>
-            <ul class="leaderboard-list">
-                <li class="leaderboard-item gold"><span>1. MistrzKlawiatury</span><span>4,250 pkt</span></li>
-                <li class="leaderboard-item silver"><span>2. AnnaKowalska</span><span>3,810 pkt</span></li>
-                <li class="leaderboard-item"><span>3. Ty (Gracz)</span><span>1,200 pkt</span></li>
-            </ul>
-        </div>
-    </main>
-
-    <aside class="chat-sidebar">
-        <div class="card chat-window">
-            <h3>💬 Czat Pokoju Gier</h3>
-            <hr>
-
-            <div class="chat-messages">
-                <div class="message received">
-                    <span class="message-sender">AnnaKowalska</span>
-                    Zaraz Was dogonię w rankingu TwarzBloku!
-                </div>
-                <div class="message sent">
-                    <span class="message-sender">Ty</span>
-                    Zobaczymy!
-                </div>
-            </div>
-
-            <div class="chat-footer">
-                <input type="text" class="form-input" placeholder="Napisz do rywali...">
-                <button class="btn btn-primary">Wyślij</button>
-            </div>
-        </div>
-    </aside>
-
+<div style="max-width:600px;margin:80px auto;text-align:center;padding:20px;">
+    <h2>🎮 Mini Gry</h2>
+    <p style="color:var(--text-muted);margin-top:16px;">Ta funkcja jest w trakcie budowy. Wróć wkrótce!</p>
+    <a href="index.php" class="btn btn-primary" style="margin-top:24px;display:inline-block;">Wróć do tablicy</a>
 </div>
-
 </body>
 </html>

@@ -1,5 +1,6 @@
 # Konfiguracja z danymi wrażliwymi
 config/mail_config.php
+.env
 
 # Zależności zewnętrzne (instaluj przez Composer lub ręcznie)
 vendor/

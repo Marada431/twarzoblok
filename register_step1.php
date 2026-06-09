@@ -81,10 +81,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Walidacja daty urodzenia (min. 13 lat)
     if (!isset($errors['dob'])) {
         $dob = $_POST['dob'];
-        $bday = new DateTime($dob);
-        $today = new DateTime();
-        if ($today->diff($bday)->y < 13) {
-            $errors['dob'] = 'Musisz mieć minimum 13 lat.';
+        try {
+            $bday = new DateTime($dob);
+            $today = new DateTime();
+            if ($today->diff($bday)->y < 13) {
+                $errors['dob'] = 'Musisz mieć minimum 13 lat.';
+            }
+        } catch (Exception $e) {
+            $errors['dob'] = 'Podana data urodzenia jest nieprawidłowa.';
+            $dob = null;
         }
     }
 
@@ -142,14 +147,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     mkdir(AVATAR_UPLOAD_DIR, 0755, true);
                 }
 
-                $ext = pathinfo($file['name'], PATHINFO_EXTENSION);
-                $filename = uniqid('avatar_', true) . '.' . $ext;
-                $destination = AVATAR_UPLOAD_DIR . $filename;
-
-                if (move_uploaded_file($file['tmp_name'], $destination)) {
-                    $avatar_path = 'upload_img/user_avatar/' . $filename;
+                $mime_to_ext = [
+                    'image/jpeg' => 'jpg',
+                    'image/png'  => 'png',
+                    'image/webp' => 'webp',
+                    'image/gif'  => 'gif',
+                ];
+                if (!array_key_exists($mime, $mime_to_ext)) {
+                    $errors['avatar'] = 'Niedozwolony typ pliku. Akceptowane formaty: JPG, PNG, WebP.';
                 } else {
-                    $errors['avatar'] = 'Nie udało się zapisać pliku.';
+                    $ext = $mime_to_ext[$mime];
+                    $filename = uniqid('avatar_', true) . '.' . $ext;
+                    $destination = AVATAR_UPLOAD_DIR . $filename;
+
+                    if (move_uploaded_file($file['tmp_name'], $destination)) {
+                        $avatar_path = 'upload_img/user_avatar/' . $filename;
+                    } else {
+                        $errors['avatar'] = 'Nie udało się zapisać pliku.';
+                    }
                 }
             }
         }
@@ -166,14 +181,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             );
             $stmt->execute([
                     $username, $password_hash, $email, $phone, $first_name, $last_name,
-                    $dob, $_POST['gender'], $avatar_path, $bio, $city, $_POST['privacy_level']
+                    $dob ?? null, $_POST['gender'], $avatar_path, $bio, $city, $_POST['privacy_level']
             ]);
 
+            session_regenerate_id(true);
             $_SESSION['email'] = $email;
             header('Location: register_step2.php');
             exit();
         } catch (PDOException $e) {
-            $errors['db'] = "Błąd zapisu: " . $e->getMessage();
+            error_log('Register Step1 DB Error: ' . $e->getMessage());
+            $errors['db'] = 'Wystąpił błąd podczas rejestracji. Spróbuj ponownie.';
         }
     }
 }

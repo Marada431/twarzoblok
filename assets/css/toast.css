@@ -1,0 +1,21 @@
+.toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    padding: 12px 20px;
+    border-radius: 8px;
+    color: white;
+    font-size: 14px;
+    max-width: 320px;
+    word-break: break-word;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.3s, transform 0.3s;
+    z-index: 9999;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+.toast--visible  { opacity: 1; transform: translateY(0); }
+.toast--success  { background: #4caf50; }
+.toast--error    { background: #f44336; }
+.toast--info     { background: #2196f3; }
+.toast--warning  { background: #ff9800; }

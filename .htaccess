@@ -1,0 +1,40 @@
+# .htaccess – TwarzoBlok security rules
+Options -Indexes
+
+# Blokuj dostęp do .env i jego wariantów (.env.local, .env.example itd.)
+<FilesMatch "^\.env(\..*)?$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Blokuj bezpośredni dostęp do pliku konfiguracji bazy
+<Files "database.php">
+    Order allow,deny
+    Deny from all
+</Files>
+
+# Blokuj dostęp do wrażliwych katalogów
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Blokuj katalog config/
+    RewriteRule ^config(/.*)?$ - [F,L]
+
+    # Blokuj katalog chat-server/
+    RewriteRule ^chat-server(/.*)?$ - [F,L]
+
+    # Blokuj katalog includes/
+    RewriteRule ^includes(/.*)?$ - [F,L]
+
+    # Blokuj katalog classes/
+    RewriteRule ^classes(/.*)?$ - [F,L]
+
+    # Blokuj katalog logs/
+    RewriteRule ^logs(/.*)?$ - [F,L]
+</IfModule>
+
+# Blokuj dostęp do plików konfiguracyjnych i logów
+<FilesMatch "\.(log|sql|sh|bak|swp|gitignore|gitkeep)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>

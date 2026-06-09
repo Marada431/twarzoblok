@@ -1,8 +1,6 @@
 <?php
 session_start();
-
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
+require_once __DIR__ . '/config/error_handler.php';
 // Sprwadza czy jest się zalogowanym
 if (isset($_SESSION['user_id'])) {
     header('Location: index.php');
@@ -12,6 +10,14 @@ if (isset($_SESSION['user_id'])) {
 $error       = '';
 $success     = '';
 $show_resend = false;
+
+$_reason = $_GET['reason'] ?? '';
+if ($_reason === 'banned') {
+    $error = 'Twoje konto zostało zablokowane. Skontaktuj się z administratorem.';
+} elseif ($_reason === 'csrf') {
+    $error = 'Sesja wygasła lub wykryto nieprawidłowe żądanie. Zaloguj się ponownie.';
+}
+unset($_reason);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_once 'config/database.php';
@@ -65,6 +71,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // Aktualizacja last_login_at
                     $updateStmt = $db->prepare("UPDATE users SET last_login_at = NOW() WHERE user_id = :user_id");
                     $updateStmt->execute([':user_id' => $user['user_id']]);
+
+                    session_regenerate_id(true);
 
                     // Wszysto do sesji dla łatwiejszego robienia strony
                     $_SESSION['user_id'] = $user['user_id'];

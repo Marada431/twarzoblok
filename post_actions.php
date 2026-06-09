@@ -1,6 +1,8 @@
 <?php
 session_start();
 require_once 'config/database.php';
+require_once 'includes/csrf.php';
+require_once 'includes/auth_check.php';
 
 if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
     header('Location: login.php');
@@ -8,6 +10,7 @@ if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
 }
 
 $current_user_id = (int) $_SESSION['user_id'];
+check_user_status(db(), $current_user_id);
 
 function createNotification(PDO $pdo, int $user_id, int $actor_id, string $type, int $reference_id): void {
     if ($user_id === $actor_id) return;
@@ -46,6 +49,13 @@ function relativeTime(string $datetime): string {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $action  = $_POST['action'];
     $post_id = (int)($_POST['post_id'] ?? 0);
+
+    // CSRF: komentarze i reakcje przychodza przez AJAX (nagłówek), reszta przez formularz (ciało)
+    if ($action === 'comment') {
+        verify_csrf_token($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
+    } else {
+        verify_csrf_token($_POST['csrf_token'] ?? '');
+    }
 
     // --- DODAWANIE KOMENTARZA ---
     if ($action === 'comment') {
@@ -146,7 +156,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             try {
                 $stmt = db()->prepare("UPDATE posts SET content = :content WHERE post_id = :pid AND (author_id = :uid OR :role = 'admin')");
                 $stmt->execute([':content' => $new_content, ':pid' => $post_id, ':uid' => $current_user_id, ':role' => $_SESSION['role'] ?? 'user']);
-            } catch (PDOException $e) {}
+            } catch (PDOException $e) {
+                error_log('[post_actions] edit error: ' . $e->getMessage());
+            }
         }
     }
 
@@ -164,7 +176,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             // Kaskada przez FK usuwa post_media, comment_reactions, post_reactions, comments
             $stmt = $pdo->prepare("DELETE FROM posts WHERE post_id = :pid AND (author_id = :uid OR :role = 'admin')");
             $stmt->execute([':pid' => $post_id, ':uid' => $current_user_id, ':role' => $_SESSION['role'] ?? 'user']);
-        } catch (PDOException $e) {}
+        } catch (PDOException $e) {
+            error_log('[post_actions] delete error: ' . $e->getMessage());
+        }
     }
 
     // --- ZGŁASZANIE POSTA ---
@@ -175,14 +189,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         try {
             $stmt = db()->prepare("INSERT INTO reports (post_id, reported_user_id, category, content, reported_at) VALUES (:pid, :uid, :cat, '', NOW())");
             $stmt->execute([':pid' => $post_id, ':uid' => $current_user_id, ':cat' => $reason]);
-        } catch (PDOException $e) {}
+        } catch (PDOException $e) {
+            error_log('[post_actions] report error: ' . $e->getMessage());
+        }
     }
 }
 
-// Przekierowanie z powrotem
-if (isset($_SERVER['HTTP_REFERER']) && strpos($_SERVER['HTTP_REFERER'], $_SERVER['HTTP_HOST']) !== false) {
-    header('Location: ' . $_SERVER['HTTP_REFERER']);
-} else {
-    header('Location: index.php');
-}
+// Przekierowanie z powrotem – biała lista dozwolonych stron
+$allowed_redirects = ['index.php', 'profile.php', 'friend_requests.php', 'groups.php'];
+$referer_path = parse_url($_SERVER['HTTP_REFERER'] ?? '', PHP_URL_PATH);
+$referer_file = basename($referer_path ?? '');
+$redirect_to  = in_array($referer_file, $allowed_redirects, true) ? $referer_file : 'index.php';
+header('Location: ' . $redirect_to);
 exit;

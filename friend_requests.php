@@ -6,16 +6,18 @@ if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
 }
 
 // Dołączamy plik konfiguracyjny z bazą danych
-require_once __DIR__ . '/config/database.php';  // Dostosuj ścieżkę jeśli potrzeba
+require_once __DIR__ . '/config/database.php';
+require_once __DIR__ . '/includes/csrf.php';
+require_once __DIR__ . '/includes/auth_check.php';
 
-// Pobieramy połączenie PDO przez funkcję pomocniczą db()
 $pdo = db();
-
 $current_user_id = (int) $_SESSION['user_id'];
+check_user_status($pdo, $current_user_id);
 $message = '';
 
 // Obsługa akceptacji / odrzucenia (POST)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['friendship_id'])) {
+    verify_csrf_token($_POST['csrf_token'] ?? '');
     $friendship_id = (int) $_POST['friendship_id'];
     $action = $_POST['action'];
 
@@ -144,6 +146,7 @@ $requests = $stmt->fetchAll();
                 <?php if ($tab === 'received'): ?>
                     <div class="request-actions">
                         <form method="post" style="margin:0;">
+                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
                             <input type="hidden" name="friendship_id" value="<?php echo $req['friendship_id']; ?>">
                             <button type="submit" name="action" value="accept" class="btn-accept">Przyjmij</button>
                             <button type="submit" name="action" value="reject" class="btn-reject">Odrzuć</button>

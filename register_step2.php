@@ -93,7 +93,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         } catch (PDOException $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
-            $msg = 'Wystąpił błąd podczas zapisu danych: ' . $e->getMessage();
+            error_log('Register Step2 DB Error: ' . $e->getMessage());
+            $msg = 'Wystąpił błąd podczas zapisu danych. Spróbuj ponownie.';
         }
     }
 }
