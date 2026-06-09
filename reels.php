@@ -9,63 +9,30 @@ if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
     exit;
 }
 
-$current_user_id = (int) $_SESSION['user_id'];
+$current_user_id = (int)$_SESSION['user_id'];
 $pdo = db();
-
 check_user_status($pdo, $current_user_id);
 
-// ─────────────────────────────────────────────
-// AJAX: Polubienia, Zapisywanie, Komentarze
-// ─────────────────────────────────────────────
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action'])) {
-    header('Content-Type: application/json');
-    $post_id = (int)$_POST['post_id'];
-    $action  = $_POST['ajax_action'];
-
-    if ($action === 'toggle_reaction' || $action === 'toggle_save') {
-        $rtype = ($action === 'toggle_save') ? 'save' : 'like';
-
-        $stmt = $pdo->prepare("SELECT reaction_id FROM post_reactions WHERE post_id = ? AND user_id = ? AND reaction_type = ?");
-        $stmt->execute([$post_id, $current_user_id, $rtype]);
-        $exists = $stmt->fetch();
-
-        if ($exists) {
-            $pdo->prepare("DELETE FROM post_reactions WHERE reaction_id = ?")->execute([$exists['reaction_id']]);
-            echo json_encode(['status' => 'removed']);
-        } else {
-            $pdo->prepare("INSERT INTO post_reactions (user_id, post_id, reaction_type) VALUES (?, ?, ?)")->execute([$current_user_id, $post_id, $rtype]);
-            echo json_encode(['status' => 'added']);
-        }
-        exit;
-    }
-
-    if ($action === 'add_comment') {
-        $content = trim($_POST['content'] ?? '');
-        if (!empty($content)) {
-            $stmt = $pdo->prepare("INSERT INTO comments (author_id, post_id, content) VALUES (?, ?, ?)");
-            $stmt->execute([$current_user_id, $post_id, $content]);
-            echo json_encode(['status' => 'success']);
-        } else {
-            echo json_encode(['status' => 'error', 'message' => 'Komentarz nie może być pusty.']);
-        }
-        exit;
-    }
-
-    echo json_encode(['status' => 'error']);
-    exit;
-}
-
-// ─────────────────────────────────────────────
-// UPLOAD NOWEJ ROLKI
-// ─────────────────────────────────────────────
+// ─── Upload nowej rolki ───────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_reel'])) {
-    $content = trim($_POST['content'] ?? '');
+    verify_csrf_token($_POST['csrf_token'] ?? '');
 
-    if (isset($_FILES['reel_video']) && $_FILES['reel_video']['error'] === UPLOAD_ERR_OK) {
+    $content       = trim($_POST['content'] ?? '');
+    $upload_error  = '';
+    $allowed_mimes = ['video/mp4', 'video/webm'];
+    $max_size      = 100 * 1024 * 1024; // 100 MB
+
+    if (!isset($_FILES['reel_video']) || $_FILES['reel_video']['error'] !== UPLOAD_ERR_OK) {
+        $upload_error = 'Błąd przesyłania pliku.';
+    } elseif ($_FILES['reel_video']['size'] > $max_size) {
+        $upload_error = 'Plik przekracza limit 100 MB.';
+    } else {
         $finfo = new finfo(FILEINFO_MIME_TYPE);
         $mime  = $finfo->file($_FILES['reel_video']['tmp_name']);
 
-        if (str_starts_with($mime, 'video/')) {
+        if (!in_array($mime, $allowed_mimes, true)) {
+            $upload_error = 'Dozwolone formaty: MP4, WebM.';
+        } else {
             $stmt = $pdo->prepare("INSERT INTO posts (author_id, content, created_at) VALUES (?, ?, NOW())");
             $stmt->execute([$current_user_id, $content]);
             $new_post_id = (int)$pdo->lastInsertId();
@@ -78,263 +45,178 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_reel'])) {
             $dest     = $dir . $filename;
 
             if (move_uploaded_file($_FILES['reel_video']['tmp_name'], $dest)) {
-                $pdo->prepare("INSERT INTO post_media (post_id, media_type, file_url) VALUES (?, 'video', ?)")
+                $pdo->prepare("INSERT INTO post_media (post_id, media_type, file_url, position) VALUES (?, 'video', ?, 0)")
                     ->execute([$new_post_id, $dest]);
+            } else {
+                $pdo->prepare("DELETE FROM posts WHERE post_id = ?")->execute([$new_post_id]);
+                $upload_error = 'Błąd zapisu pliku.';
             }
         }
     }
-    header('Location: reels.php');
+
+    header('Location: reels.php' . ($upload_error ? '?error=' . urlencode($upload_error) : ''));
     exit;
 }
 
-// ─────────────────────────────────────────────
-// POBIERANIE ROLEK (posty zawierające wideo)
-// ─────────────────────────────────────────────
+// ─── Pierwsze 10 rolek ────────────────────────────────────────────────────────
 $stmt = $pdo->prepare("
     SELECT p.post_id, p.content, p.created_at, pm.file_url,
+           p.author_id,
            u.first_name, u.last_name, u.avatar_url,
            (SELECT COUNT(*) FROM post_reactions WHERE post_id = p.post_id AND reaction_type = 'like') AS likes_count,
            (SELECT COUNT(*) FROM comments        WHERE post_id = p.post_id AND parent_comment_id IS NULL) AS comments_count,
-           (SELECT COUNT(*) FROM post_reactions WHERE post_id = p.post_id AND reaction_type = 'like' AND user_id = :uid1) AS is_liked,
-           (SELECT COUNT(*) FROM post_reactions WHERE post_id = p.post_id AND reaction_type = 'save' AND user_id = :uid2) AS is_saved
+           (SELECT COUNT(*) FROM post_reactions  WHERE post_id = p.post_id AND reaction_type = 'like' AND user_id = :uid1) AS is_liked,
+           (SELECT COUNT(*) FROM post_reactions  WHERE post_id = p.post_id AND reaction_type = 'save' AND user_id = :uid2) AS is_saved
     FROM posts p
     JOIN post_media pm ON p.post_id = pm.post_id AND pm.media_type = 'video'
     JOIN users u ON p.author_id = u.user_id
-    ORDER BY RAND()
-    LIMIT 20
+    ORDER BY p.created_at DESC
+    LIMIT 10
 ");
 $stmt->execute([':uid1' => $current_user_id, ':uid2' => $current_user_id]);
 $reels = $stmt->fetchAll();
+
+$csrf_token = generate_csrf_token();
+$upload_error_msg = htmlspecialchars($_GET['error'] ?? '');
 ?>
 <!doctype html>
 <html lang="pl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="<?= $csrf_token ?>">
     <title>TwarzBlok – Rolki</title>
     <link rel="stylesheet" href="assets/css/main.css">
-    <style>
-        body { background: #18191A; color: white; margin: 0; padding: 0; overflow: hidden; }
-
-        .reels-container {
-            height: calc(100vh - 60px);
-            scroll-snap-type: y mandatory;
-            overflow-y: scroll;
-            overflow-x: hidden;
-            scroll-behavior: smooth;
-        }
-        .reels-container::-webkit-scrollbar { display: none; }
-
-        .reel-wrapper {
-            height: 100%;
-            width: 100%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            scroll-snap-align: start;
-            position: relative;
-        }
-
-        .reel-video-container {
-            position: relative;
-            height: 95%;
-            width: 100%;
-            max-width: 450px;
-            background: #000;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-        }
-
-        .reel-video-container video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            cursor: pointer;
-        }
-
-        .reel-overlay {
-            position: absolute;
-            bottom: 0; left: 0; right: 0;
-            padding: 20px;
-            background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-end;
-            pointer-events: none;
-        }
-
-        .reel-info { pointer-events: auto; max-width: 75%; }
-        .reel-author { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-        .reel-author img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 2px solid white; }
-        .reel-author h3 { margin: 0; font-size: 16px; text-shadow: 1px 1px 2px black; }
-        .reel-desc { font-size: 14px; margin: 0; text-shadow: 1px 1px 2px black; }
-
-        .reel-actions { display: flex; flex-direction: column; gap: 20px; pointer-events: auto; }
-        .action-btn {
-            background: rgba(0,0,0,0.4); border: none; color: white;
-            border-radius: 50%; width: 50px; height: 50px;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            cursor: pointer; transition: 0.2s;
-        }
-        .action-btn:hover { background: rgba(255,255,255,0.2); }
-        .action-btn.active { color: #e41e3f; }
-        .action-btn.saved  { color: #f1c40f; }
-        .action-text { font-size: 12px; margin-top: 4px; font-weight: bold; text-shadow: 1px 1px 2px black; }
-
-        .add-reel-float {
-            position: fixed; top: 80px; right: 20px;
-            background: var(--primary-color, #338336); color: white;
-            padding: 10px 20px; border-radius: 20px; font-weight: bold;
-            cursor: pointer; z-index: 100; box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-            border: none;
-        }
-
-        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 999; justify-content: center; align-items: center; }
-        .modal-box { background: #242526; padding: 20px; border-radius: 12px; width: 90%; max-width: 400px; color: white; }
-        .modal-box input, .modal-box textarea { width: 100%; padding: 10px; margin-top: 10px; border-radius: 6px; border: none; background: #3a3b3c; color: white; box-sizing: border-box; }
-        .modal-box button { margin-top: 15px; width: 100%; padding: 10px; background: var(--primary-color, #338336); color: white; border: none; border-radius: 6px; cursor: pointer; }
-        .close-modal { float: right; cursor: pointer; font-size: 20px; }
-    </style>
+    <link rel="stylesheet" href="assets/css/reels.css">
 </head>
 <body>
 
 <?php $nav_active = 'reels'; require_once __DIR__ . '/includes/navbar.php'; ?>
 
-<button class="add-reel-float" onclick="document.getElementById('uploadModal').style.display='flex'">+ Dodaj Rolkę</button>
+<button class="add-reel-float" id="openUploadModal">+ Dodaj Rolkę</button>
 
 <div class="reels-container" id="reelsContainer">
     <?php if (empty($reels)): ?>
-        <div style="text-align:center; margin-top:50px;">
+        <div class="reels-empty">
             <h2>Brak dostępnych rolek. Bądź pierwszy!</h2>
         </div>
     <?php endif; ?>
 
-    <?php foreach ($reels as $reel): ?>
-        <div class="reel-wrapper">
+    <?php foreach ($reels as $reel):
+        $is_own    = ((int)$reel['author_id'] === $current_user_id);
+        $avatar    = htmlspecialchars($reel['avatar_url'] ?: './icons/default-avatar.png');
+        $author    = htmlspecialchars($reel['first_name'] . ' ' . $reel['last_name']);
+        $file_url  = htmlspecialchars($reel['file_url']);
+        $desc      = nl2br(htmlspecialchars($reel['content']));
+    ?>
+        <div class="reel-wrapper" data-post-id="<?= (int)$reel['post_id'] ?>">
             <div class="reel-video-container">
-                <video src="<?= htmlspecialchars($reel['file_url']) ?>" loop playsinline></video>
+                <div class="reel-progress"><div class="reel-progress-bar"></div></div>
+
+                <video src="<?= $file_url ?>" loop playsinline></video>
+
+                <button class="mute-btn" title="Wycisz/Włącz dźwięk">🔊</button>
 
                 <div class="reel-overlay">
                     <div class="reel-info">
                         <div class="reel-author">
-                            <img src="<?= htmlspecialchars($reel['avatar_url'] ?: './icons/default-avatar.png') ?>" alt="Avatar">
-                            <h3><?= htmlspecialchars($reel['first_name'] . ' ' . $reel['last_name']) ?></h3>
+                            <img src="<?= $avatar ?>" alt="Avatar">
+                            <h3><?= $author ?></h3>
                         </div>
-                        <p class="reel-desc"><?= nl2br(htmlspecialchars($reel['content'])) ?></p>
+                        <?php if ($reel['content']): ?>
+                            <p class="reel-desc"><?= $desc ?></p>
+                        <?php endif; ?>
                     </div>
 
                     <div class="reel-actions">
                         <button class="action-btn <?= $reel['is_liked'] ? 'active' : '' ?>"
-                                onclick="toggleAction('toggle_reaction', <?= $reel['post_id'] ?>, this, 'likes_count')">
+                                data-action="toggle_reaction"
+                                title="Lubię to">
                             ❤️
-                            <span class="action-text" id="likes_count_<?= $reel['post_id'] ?>"><?= (int)$reel['likes_count'] ?></span>
+                            <span class="action-text"><?= (int)$reel['likes_count'] ?></span>
                         </button>
 
-                        <button class="action-btn" onclick="openComments(<?= $reel['post_id'] ?>)">
+                        <button class="action-btn"
+                                data-action="open_comments"
+                                title="Komentarze">
                             💬
                             <span class="action-text"><?= (int)$reel['comments_count'] ?></span>
                         </button>
 
                         <button class="action-btn <?= $reel['is_saved'] ? 'saved' : '' ?>"
-                                onclick="toggleAction('toggle_save', <?= $reel['post_id'] ?>, this, null)">
+                                data-action="toggle_save"
+                                title="Zapisz">
                             🔖
                             <span class="action-text">Zapisz</span>
                         </button>
+
+                        <button class="action-btn"
+                                data-action="share"
+                                data-title="<?= $author ?>"
+                                title="Udostępnij">
+                            🔗
+                            <span class="action-text">Udostępnij</span>
+                        </button>
+
+                        <?php if ($is_own): ?>
+                            <button class="action-btn delete-btn"
+                                    data-action="delete_reel"
+                                    title="Usuń rolkę">
+                                🗑️
+                                <span class="action-text">Usuń</span>
+                            </button>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
         </div>
     <?php endforeach; ?>
+
+    <div id="sentinel"></div>
 </div>
+
+<!-- Panel komentarzy -->
+<div class="comments-panel" id="commentsPanel">
+    <div class="comments-panel-header">
+        <h3>Komentarze</h3>
+        <button class="comments-close-btn" id="closeCommentsPanel">&times;</button>
+    </div>
+    <div class="comments-list" id="commentsList">
+        <p class="comments-loading">Ładowanie...</p>
+    </div>
+    <div class="comments-form">
+        <input type="hidden" id="commentPostId">
+        <textarea id="commentText" rows="2" placeholder="Dodaj komentarz..."></textarea>
+        <button class="comments-submit-btn" id="submitCommentBtn">Wyślij</button>
+    </div>
+</div>
+<div class="comments-overlay" id="commentsOverlay"></div>
 
 <!-- Modal: Dodaj rolkę -->
 <div id="uploadModal" class="modal-overlay">
     <div class="modal-box">
-        <span class="close-modal" onclick="document.getElementById('uploadModal').style.display='none'">&times;</span>
+        <span class="close-modal" id="closeUploadModal">&times;</span>
         <h3>Dodaj nową rolkę</h3>
+        <?php if ($upload_error_msg): ?>
+            <p class="upload-error"><?= $upload_error_msg ?></p>
+        <?php endif; ?>
         <form method="POST" enctype="multipart/form-data" action="reels.php">
+            <input type="hidden" name="csrf_token" value="<?= $csrf_token ?>">
             <input type="text" name="content" placeholder="Opisz swoją rolkę..." autocomplete="off">
             <input type="file" name="reel_video" accept="video/mp4,video/webm" required>
+            <p class="upload-hint">Maks. 100 MB · MP4 lub WebM</p>
             <button type="submit" name="upload_reel">Opublikuj</button>
         </form>
     </div>
 </div>
 
-<!-- Modal: Komentarze -->
-<div id="commentModal" class="modal-overlay">
-    <div class="modal-box">
-        <span class="close-modal" onclick="document.getElementById('commentModal').style.display='none'">&times;</span>
-        <h3>Napisz komentarz</h3>
-        <textarea id="commentText" rows="3" placeholder="Twój komentarz..."></textarea>
-        <input type="hidden" id="commentPostId">
-        <button onclick="submitComment()">Wyślij komentarz</button>
-    </div>
-</div>
-
+<script src="assets/js/reels.js"></script>
 <script>
-    const observer = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-            if (entry.isIntersecting) {
-                entry.target.play().catch(() => {});
-            } else {
-                entry.target.pause();
-                entry.target.currentTime = 0;
-            }
-        });
-    }, { threshold: 0.6 });
-
-    document.querySelectorAll('video').forEach(video => {
-        observer.observe(video);
-        video.addEventListener('click', () => {
-            video.paused ? video.play() : video.pause();
-        });
-    });
-
-    function toggleAction(action, postId, btn, countId) {
-        const formData = new FormData();
-        formData.append('ajax_action', action);
-        formData.append('post_id', postId);
-
-        fetch('reels.php', { method: 'POST', body: formData })
-            .then(r => r.json())
-            .then(data => {
-                if (action === 'toggle_reaction') {
-                    btn.classList.toggle('active');
-                    const span = document.getElementById(countId + '_' + postId);
-                    span.textContent = data.status === 'added'
-                        ? parseInt(span.textContent) + 1
-                        : parseInt(span.textContent) - 1;
-                } else {
-                    btn.classList.toggle('saved');
-                }
-            });
-    }
-
-    function openComments(postId) {
-        document.getElementById('commentPostId').value = postId;
-        document.getElementById('commentText').value = '';
-        document.getElementById('commentModal').style.display = 'flex';
-    }
-
-    function submitComment() {
-        const postId  = document.getElementById('commentPostId').value;
-        const content = document.getElementById('commentText').value.trim();
-        if (!content) return;
-
-        const formData = new FormData();
-        formData.append('ajax_action', 'add_comment');
-        formData.append('post_id', postId);
-        formData.append('content', content);
-
-        fetch('reels.php', { method: 'POST', body: formData })
-            .then(r => r.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    document.getElementById('commentModal').style.display = 'none';
-                }
-            });
-    }
+    window.REELS_CONFIG = {
+        currentUserId: <?= $current_user_id ?>,
+        initialOffset: <?= count($reels) ?>
+    };
+    document.addEventListener('DOMContentLoaded', () => { window.reelsApp = new ReelsApp(); });
 </script>
 </body>
 </html>

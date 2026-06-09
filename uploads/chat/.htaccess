@@ -1,0 +1,7 @@
+# Blokuje wykonanie PHP w katalogu z uploadami
+<FilesMatch "\.php$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+Options -ExecCGI
+AddHandler cgi-script .php .php3 .php4 .php5 .phtml .pl .py .jsp
