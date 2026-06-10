@@ -8,6 +8,7 @@ if (!isset($_SESSION['user_id'])) {
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/includes/csrf.php';
 require_once __DIR__ . '/includes/auth_check.php';
+require_once __DIR__ . '/app/models/GroupChatModel.php';
 
 $userId   = (int)$_SESSION['user_id'];
 check_user_status(db(), $userId);
@@ -81,6 +82,10 @@ usort($friends, function ($a, $b) {
     return $tb - $ta;
 });
 
+// ── Czaty grupowe ──────────────────────────────────────────
+$groupModel = new GroupChatModel(db());
+$groupChats = $groupModel->getUserGroups($userId);
+
 // Token JWT dla Socket.io
 $payload   = json_encode(['user_id' => $userId, 'username' => $username, 'exp' => time() + 3600]);
 $signature = hash_hmac('sha256', $payload, SOCKET_SECRET, true);
@@ -92,8 +97,8 @@ $token     = base64_encode($payload) . '.' . base64_encode($signature);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TwarzBlok – Wiadomości</title>
-    <link rel="stylesheet" href="assets/css/main.css">
-    <link rel="stylesheet" href="assets/css/chat-app.css">
+    <link rel="stylesheet" href="assets/css/main.css?v=<?= filemtime(__DIR__.'/assets/css/main.css') ?>">
+    <link rel="stylesheet" href="assets/css/chat-app.css?v=<?= filemtime(__DIR__.'/assets/css/chat-app.css') ?>">
 </head>
 <body>
 
@@ -110,8 +115,16 @@ require_once __DIR__ . '/includes/navbar.php';
     <!-- Lewa kolumna: lista rozmów -->
     <aside class="chat-sidebar" id="chatSidebar">
         <div class="sidebar-head">
-            <h3>Wiadomości</h3>
-            <input type="text" class="sidebar-search" id="searchInput" placeholder="Szukaj znajomych...">
+            <div class="sidebar-head-top">
+                <h3>Wiadomości</h3>
+                <button class="btn-new-group" id="newGroupBtn" title="Nowa Grupa">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512" fill="currentColor">
+                        <path d="M96 128a128 128 0 1 1 256 0A128 128 0 1 1 96 128zM0 482.3C0 383.8 79.8 304 178.3 304l91.4 0C368.2 304 448 383.8 448 482.3c0 16.4-13.3 29.7-29.7 29.7L29.7 512C13.3 512 0 498.7 0 482.3zM504 312l0-64-64 0c-13.3 0-24-10.7-24-24s10.7-24 24-24l64 0 0-64c0-13.3 10.7-24 24-24s24 10.7 24 24l0 64 64 0c13.3 0 24 10.7 24 24s-10.7 24-24 24l-64 0 0 64c0 13.3-10.7 24-24 24s-24-10.7-24-24z"/>
+                    </svg>
+                    <span class="btn-new-group-label">Nowa grupa</span>
+                </button>
+            </div>
+            <input type="text" class="sidebar-search" id="searchInput" placeholder="Szukaj rozmów...">
         </div>
 
         <div class="convs-list" id="convsList">
@@ -167,6 +180,54 @@ require_once __DIR__ . '/includes/navbar.php';
                         <div class="conv-last<?= $hasUnread ? ' has-unread' : '' ?>"
                              id="last-msg-<?= $friend['user_id'] ?>">
                             <?= $lastPreview ?>
+                        </div>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
+
+            <?php if (!empty($groupChats)): ?>
+                <div class="conv-section-label">Grupy</div>
+                <?php foreach ($groupChats as $g):
+                    $gName      = htmlspecialchars($g['name']);
+                    $gAvatar    = htmlspecialchars($g['avatar_url'] ?? '');
+                    $gInitials  = htmlspecialchars(mb_strtoupper(mb_substr($g['name'], 0, 2)));
+                    $gUnread    = (int)$g['unread'];
+                    $gMembers   = (int)$g['member_count'];
+                    if ($g['last_attach'] && !$g['last_msg']) {
+                        $gPreview = '📷 Zdjęcie';
+                    } elseif ($g['last_msg']) {
+                        $gPreview = mb_strimwidth(htmlspecialchars($g['last_msg']), 0, 38, '…');
+                    } else {
+                        $gPreview = '';
+                    }
+                ?>
+                <div class="conv-item"
+                     data-type="group"
+                     data-chat-id="<?= $g['chat_id'] ?>"
+                     data-name="<?= $gName ?>"
+                     data-avatar="<?= $gAvatar ?>"
+                     data-initials="<?= $gInitials ?>"
+                     data-member-count="<?= $gMembers ?>">
+
+                    <div class="av-wrap">
+                        <?php if ($gAvatar): ?>
+                            <img src="<?= $gAvatar ?>" alt="" class="av-img">
+                        <?php else: ?>
+                            <div class="group-av-placeholder"><?= $gInitials ?></div>
+                        <?php endif; ?>
+                    </div>
+
+                    <div class="conv-info">
+                        <div class="conv-info-top">
+                            <div class="conv-name<?= $gUnread ? ' has-unread' : '' ?>"><?= $gName ?></div>
+                            <span class="unread-badge<?= $gUnread ? ' visible' : '' ?>">
+                                <?= $gUnread ? min($gUnread, 99) : '' ?>
+                            </span>
+                        </div>
+                        <div class="conv-last<?= $gUnread ? ' has-unread' : '' ?>"
+                             id="last-msg-group-<?= $g['chat_id'] ?>">
+                            <?= $gPreview ?>
                         </div>
                     </div>
                 </div>
@@ -234,24 +295,84 @@ require_once __DIR__ . '/includes/navbar.php';
 
 </div><!-- /.chat-app -->
 
+<!-- ── Panel uczestników grupy ──────────────────────────── -->
+<div class="group-members-panel" id="groupMembersPanel">
+    <div class="group-members-header">
+        <span>Uczestnicy</span>
+        <button class="fb-modal-close" id="groupMembersPanelClose">&#10005;</button>
+    </div>
+    <div id="groupMembersList"></div>
+</div>
+
+<!-- ── Modal nowej grupy ───────────────────────────────── -->
+<div class="group-modal" id="groupModalOverlay" style="display:none">
+    <div class="fb-modal-card" style="max-width:480px;max-height:90vh;display:flex;flex-direction:column">
+        <div class="fb-modal-header">
+            <h3>Nowa Grupa</h3>
+            <button class="fb-modal-close" id="groupModalClose">&#10005;</button>
+        </div>
+        <div class="fb-modal-body" style="overflow-y:auto;flex:1">
+            <input type="text" id="groupNameInput" class="chat-text-input"
+                   style="width:100%;box-sizing:border-box;margin-bottom:10px"
+                   placeholder="Nazwa grupy *" maxlength="100">
+            <input type="text" id="groupDescInput" class="chat-text-input"
+                   style="width:100%;box-sizing:border-box;margin-bottom:14px"
+                   placeholder="Opis (opcjonalnie)" maxlength="255">
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:8px;font-weight:600">
+                Wybierz uczestników:
+            </p>
+            <div class="group-friends-picker" id="groupFriendsPicker">
+                <?php foreach ($friends as $f):
+                    $fDisplay  = htmlspecialchars($f['first_name'] . ' ' . $f['last_name']);
+                    $fAvatar   = htmlspecialchars($f['avatar_url'] ?? '');
+                    $fInitials = strtoupper(mb_substr($f['first_name'],0,1).mb_substr($f['last_name'],0,1));
+                ?>
+                <label class="group-friend-row">
+                    <input type="checkbox" class="group-member-cb" value="<?= $f['user_id'] ?>">
+                    <div class="av-wrap" style="width:32px;height:32px;flex-shrink:0">
+                        <?php if ($fAvatar): ?>
+                            <img src="<?= $fAvatar ?>" class="av-img" style="width:32px;height:32px" alt="">
+                        <?php else: ?>
+                            <div class="av-placeholder" style="width:32px;height:32px;font-size:12px"><?= $fInitials ?></div>
+                        <?php endif; ?>
+                    </div>
+                    <span><?= $fDisplay ?></span>
+                </label>
+                <?php endforeach; ?>
+                <?php if (empty($friends)): ?>
+                    <p style="padding:12px;color:var(--text-muted);font-size:13px">Brak znajomych do dodania.</p>
+                <?php endif; ?>
+            </div>
+        </div>
+        <div class="fb-modal-footer">
+            <button id="groupModalCancelBtn" type="button"
+                    style="background:none;border:1px solid var(--border-color);padding:8px 18px;border-radius:var(--radius-main);cursor:pointer;font-size:14px">
+                Anuluj
+            </button>
+            <button id="groupModalCreateBtn" type="button"
+                    style="background:var(--primary-color);color:#fff;border:none;padding:8px 18px;border-radius:var(--radius-main);cursor:pointer;font-size:14px;font-weight:600">
+                Utwórz grupę
+            </button>
+        </div>
+    </div>
+</div>
+
 <!-- Lightbox -->
 <div class="lightbox" id="lightbox">
     <button class="btn-lightbox-close" id="lightboxClose">&#10005;</button>
     <img class="lightbox-img" id="lightboxImg" src="" alt="Podgląd zdjęcia">
 </div>
 
-<link rel="stylesheet" href="assets/css/toast.css">
+<link rel="stylesheet" href="assets/css/toast.css?v=<?= filemtime(__DIR__.'/assets/css/toast.css') ?>">
 <script src="http://localhost:3000/socket.io/socket.io.js"></script>
-<script src="assets/js/toast.js"></script>
+<script src="assets/js/toast.js?v=<?= filemtime(__DIR__.'/assets/js/toast.js') ?>"></script>
 <script>
 const APP_CONFIG = {
     token:     <?= json_encode($token) ?>,
     userId:    <?= $userId ?>,
     csrfToken: '<?= htmlspecialchars(generate_csrf_token(), ENT_QUOTES, 'UTF-8') ?>'
 };
-
-
 </script>
-<script src="assets/js/chat.js"></script>
+<script src="assets/js/chat.js?v=<?= filemtime(__DIR__.'/assets/js/chat.js') ?>"></script>
 </body>
 </html>

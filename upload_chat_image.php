@@ -8,9 +8,12 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
-require_once __DIR__ . '/includes/csrf.php';
 $csrf = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? ($_POST['csrf_token'] ?? '');
-verify_csrf_token($csrf);
+if (empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $csrf)) {
+    http_response_code(403);
+    echo json_encode(['error' => 'Nieprawidłowy token CSRF. Odśwież stronę.']);
+    exit;
+}
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST' || empty($_FILES['image'])) {
     http_response_code(400);

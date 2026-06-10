@@ -1,7 +1,7 @@
 /* === LAYOUT === */
 @media (max-width: 1100px) {
     .fb-container, .fb-container.game-layout { grid-template-columns: 240px 1fr; }
-    .sidebar-right, .chat-sidebar { display: none; margin-right: 0%}
+    .sidebar-right { display: none; margin-right: 0; }
 }
 @media (max-width: 768px) {
     .fb-container, .fb-container.game-layout { grid-template-columns: 1fr; }

@@ -84,38 +84,31 @@ class AuthController {
     // REJESTRACJA
     // ════════════════════════════════════════════════════════
 
-    public function showRegister(): void {
-        $data = ['errors' => [], 'old' => []];
+    public function showRegister(array $data = []): void {
+        if (empty($data)) {
+            $data = ['errors' => [], 'old' => [], 'step' => 1];
+        }
         require __DIR__ . '/../views/auth/register.view.php';
     }
 
-    public function handleRegister(): void {
+    public function handleRegisterStep1(): void {
         verify_csrf_token($_POST['csrf_token'] ?? '');
 
-        $errors = [];
-        $old    = [
-            'username'      => trim($_POST['username'] ?? ''),
-            'email'         => trim($_POST['email'] ?? ''),
+        $old = [
             'first_name'    => trim($_POST['first_name'] ?? ''),
             'last_name'     => trim($_POST['last_name'] ?? ''),
+            'username'      => trim($_POST['username'] ?? ''),
+            'email'         => trim($_POST['email'] ?? ''),
             'dob'           => trim($_POST['date_of_birth'] ?? ''),
             'gender'        => $_POST['gender'] ?? '',
             'privacy_level' => $_POST['privacy_level'] ?? 'public',
-            // ZMIANA 1 – telefon
-            'phone'         => preg_replace('/[\s\-\(\)]/', '', trim($_POST['phone'] ?? '')),
-            // ZMIANA 2 – adres (osobna tabela addresses)
-            'city'          => trim($_POST['city'] ?? ''),
-            'street'        => trim($_POST['street'] ?? ''),
-            'house_number'  => trim($_POST['house_number'] ?? ''),
-            'postal_code'   => trim($_POST['postal_code'] ?? ''),
         ];
 
         $password  = $_POST['password'] ?? '';
         $password2 = $_POST['password_confirm'] ?? '';
-        $terms     = isset($_POST['terms_accepted']);
+        $errors    = [];
 
-        // ── Walidacja pól ────────────────────────────────────
-
+        // ── Imię i nazwisko ──────────────────────────────────
         if (empty($old['first_name']))
             $errors['first_name'] = 'Imię jest wymagane.';
         elseif (mb_strlen($old['first_name']) > 50)
@@ -126,14 +119,16 @@ class AuthController {
         elseif (mb_strlen($old['last_name']) > 50)
             $errors['last_name'] = 'Nazwisko może mieć maksymalnie 50 znaków.';
 
+        // ── Nazwa użytkownika ────────────────────────────────
         if (empty($old['username'])) {
             $errors['username'] = 'Nazwa użytkownika jest wymagana.';
-        } elseif (!preg_match('/^[a-zA-Z0-9_]{3,50}$/', $old['username'])) {
-            $errors['username'] = 'Nazwa użytkownika: 3–50 znaków, tylko litery, cyfry i _.';
+        } elseif (!preg_match('/^[a-zA-Z0-9_]{3,30}$/', $old['username'])) {
+            $errors['username'] = 'Nazwa użytkownika może zawierać tylko litery (a-z, A-Z), cyfry i znak _, od 3 do 30 znaków.';
         } elseif ($this->userModel->isUsernameTaken($old['username'])) {
             $errors['username'] = 'Ta nazwa użytkownika jest już zajęta.';
         }
 
+        // ── E-mail ───────────────────────────────────────────
         if (empty($old['email'])) {
             $errors['email'] = 'Adres e-mail jest wymagany.';
         } elseif (!filter_var($old['email'], FILTER_VALIDATE_EMAIL)) {
@@ -142,49 +137,80 @@ class AuthController {
             $errors['email'] = 'Ten adres e-mail jest już zarejestrowany.';
         }
 
-        if (strlen($password) < 8) {
+        // ── Hasło ────────────────────────────────────────────
+        if (empty($password)) {
+            $errors['password'] = 'Hasło jest wymagane.';
+        } elseif (strlen($password) < 8) {
             $errors['password'] = 'Hasło musi mieć co najmniej 8 znaków.';
         } elseif (!preg_match('/[A-Z]/', $password)) {
             $errors['password'] = 'Hasło musi zawierać co najmniej jedną wielką literę.';
-        } elseif (!preg_match('/[a-z]/', $password)) {
-            $errors['password'] = 'Hasło musi zawierać co najmniej jedną małą literę.';
         } elseif (!preg_match('/[0-9]/', $password)) {
             $errors['password'] = 'Hasło musi zawierać co najmniej jedną cyfrę.';
         } elseif ($password !== $password2) {
             $errors['password_confirm'] = 'Hasła nie są identyczne.';
         }
 
+        // ── Data urodzenia ───────────────────────────────────
         if (empty($old['dob'])) {
             $errors['dob'] = 'Data urodzenia jest wymagana.';
         } else {
             try {
                 $dob = new DateTime($old['dob']);
                 $age = (new DateTime())->diff($dob)->y;
-                if ($age < 13)
-                    $errors['dob'] = 'Musisz mieć co najmniej 13 lat.';
-                if ($age > 120)
-                    $errors['dob'] = 'Podana data urodzenia jest nieprawidłowa.';
+                if ($age < 13)  $errors['dob'] = 'Musisz mieć co najmniej 13 lat.';
+                if ($age > 120) $errors['dob'] = 'Podana data urodzenia jest nieprawidłowa.';
             } catch (Exception) {
                 $errors['dob'] = 'Nieprawidłowy format daty.';
             }
         }
 
-        // Wartości płci zgodne z bazą danych: M, F, Other
-        if (empty($old['gender']) ||
-            !in_array($old['gender'], ['M', 'F', 'Other'], true)) {
+        // ── Płeć ─────────────────────────────────────────────
+        if (empty($old['gender']) || !in_array($old['gender'], ['M', 'F', 'Other'], true)) {
             $errors['gender'] = 'Wybierz płeć.';
         }
 
-        // ZMIANA 1 – walidacja telefonu
+        if (!empty($errors)) {
+            $data = ['errors' => $errors, 'old' => $old, 'step' => 1];
+            require __DIR__ . '/../views/auth/register.view.php';
+            return;
+        }
+
+        // Zapisz w sesji – NIE hashujemy tu; create() zrobi to sam
+        $_SESSION['register_step1'] = array_merge($old, ['password' => $password]);
+
+        $data = ['errors' => [], 'old' => [], 'step' => 2];
+        require __DIR__ . '/../views/auth/register.view.php';
+    }
+
+    public function handleRegisterStep2(): void {
+        verify_csrf_token($_POST['csrf_token'] ?? '');
+
+        if (empty($_SESSION['register_step1'])) {
+            header('Location: register.php');
+            exit;
+        }
+
+        $old = [
+            'phone'        => preg_replace('/[^0-9]/', '', trim($_POST['phone'] ?? '')),
+            'city'         => trim($_POST['city'] ?? ''),
+            'street'       => trim($_POST['street'] ?? ''),
+            'house_number' => trim($_POST['house_number'] ?? ''),
+            'postal_code'  => trim($_POST['postal_code'] ?? ''),
+        ];
+
+        $terms  = isset($_POST['terms_accepted']);
+        $errors = [];
+
+        // ── Telefon ──────────────────────────────────────────
         if (empty($old['phone'])) {
             $errors['phone'] = 'Numer telefonu jest wymagany.';
-        } elseif (!preg_match('/^\+?[0-9]{9,15}$/', $old['phone'])) {
-            $errors['phone'] = 'Podaj prawidłowy numer telefonu (9–15 cyfr).';
+        } elseif (!preg_match('/^[0-9]{9}$/', $old['phone'])) {
+            $errors['phone'] = 'Numer telefonu musi składać się z dokładnie 9 cyfr.';
         } elseif ($this->userModel->isPhoneTaken($old['phone'])) {
             $errors['phone'] = 'Ten numer telefonu jest już zarejestrowany.';
         }
 
-        // ZMIANA 2 – walidacja adresu (tabela addresses: wszystkie kolumny NOT NULL)
+        // ── Adres ────────────────────────────────────────────
         if (empty($old['city']))
             $errors['city'] = 'Miasto jest wymagane.';
 
@@ -197,35 +223,38 @@ class AuthController {
         if (empty($old['postal_code'])) {
             $errors['postal_code'] = 'Kod pocztowy jest wymagany.';
         } elseif (!preg_match('/^\d{2}-\d{3}$/', $old['postal_code'])) {
-            $errors['postal_code'] = 'Podaj kod pocztowy w formacie XX-XXX (np. 00-000).';
+            $errors['postal_code'] = 'Podaj kod pocztowy w formacie XX-XXX (np. 12-345).';
         }
 
+        // ── Regulamin ────────────────────────────────────────
         if (!$terms) {
             $errors['terms'] = 'Musisz zaakceptować regulamin i politykę prywatności.';
         }
 
         if (!empty($errors)) {
-            $data = ['errors' => $errors, 'old' => $old];
+            $old['terms_accepted'] = $terms ? '1' : '';
+            $data = ['errors' => $errors, 'old' => $old, 'step' => 2];
             require __DIR__ . '/../views/auth/register.view.php';
             return;
         }
 
-        // ── Zapis do bazy (transakcja: users + addresses) ────────
+        // ── Zapis do bazy ────────────────────────────────────
+        $step1             = $_SESSION['register_step1'];
         $verificationToken = bin2hex(random_bytes(32));
 
         try {
             $userId = $this->userModel->createWithAddress(
                 [
-                    'username'           => $old['username'],
-                    'email'              => $old['email'],
-                    'password'           => $password,
-                    'first_name'         => $old['first_name'],
-                    'last_name'          => $old['last_name'],
-                    'dob'                => $old['dob'],
-                    'gender'             => $old['gender'],
+                    'username'           => $step1['username'],
+                    'email'              => $step1['email'],
+                    'password'           => $step1['password'], // surowe – create() hashuje
+                    'first_name'         => $step1['first_name'],
+                    'last_name'          => $step1['last_name'],
+                    'dob'                => $step1['dob'],
+                    'gender'             => $step1['gender'],
+                    'privacy_level'      => $step1['privacy_level'],
                     'phone'              => $old['phone'],
                     'city'               => $old['city'],
-                    'privacy_level'      => $old['privacy_level'],
                     'verification_token' => $verificationToken,
                 ],
                 [
@@ -236,17 +265,20 @@ class AuthController {
                 ]
             );
         } catch (PDOException $e) {
-            error_log('AuthController::handleRegister DB error: ' . $e->getMessage());
+            error_log('AuthController::handleRegisterStep2 DB error: ' . $e->getMessage());
             $data = [
                 'errors' => ['db' => 'Wystąpił błąd podczas rejestracji. Spróbuj ponownie.'],
                 'old'    => $old,
+                'step'   => 2,
             ];
             require __DIR__ . '/../views/auth/register.view.php';
             return;
         }
 
+        unset($_SESSION['register_step1']);
+
         // ── MAIL: odkomentuj gdy będzie gotowy serwer SMTP ───────────────
-        // $this->sendVerificationEmail($old['email'], $verificationToken);
+        // $this->sendVerificationEmail($step1['email'], $verificationToken);
         // header('Location: login.php?registered=1');
         // exit;
 

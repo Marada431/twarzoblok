@@ -1,5 +1,5 @@
 /* chat.js – logika czatu TwarzBlok
- * Wymaga globalnego APP_CONFIG = { token, userId } ustawionego w PHP przed załadowaniem tego pliku.
+ * Wymaga globalnego APP_CONFIG = { token, userId, csrfToken } ustawionego w PHP przed załadowaniem tego pliku.
  * Wymaga załadowanego socket.io.
  */
 
@@ -9,6 +9,7 @@ const ChatApp = {
     socket:          null,
     currentChatId:   null,
     currentFriendId: null,
+    currentChatType: null,   // 'private' | 'group'
     oldestMsgId:     null,
     selectedFile:    null,
     lastMsgDateKey:  null,
@@ -17,6 +18,15 @@ const ChatApp = {
 
     // ── Inicjalizacja ────────────────────────────────────────
     init() {
+        // bindEvents() musi działać niezależnie od tego czy socket.io się załaduje
+        this.bindEvents();
+        this.refreshUnreadBadges();
+        setInterval(() => this.updatePendingFriendsCount(), 15000);
+
+        if (typeof io === 'undefined') {
+            console.error('❌ Socket.io niedostępne – serwer Node.js nie działa?');
+            return;
+        }
         this.socket = io('http://localhost:3000', { auth: { token: this.token } });
         this.socket.on('connect',       () => console.log('✅ Socket.io ok'));
         this.socket.on('connect_error', e  => console.error('❌ Socket:', e.message));
@@ -25,18 +35,24 @@ const ChatApp = {
         this.socket.on('new_message',  msg => this.onNewMessage(msg));
         this.socket.on('user_online',  d   => this.setUserOnline(d.user_id, true));
         this.socket.on('user_offline', d   => this.setUserOnline(d.user_id, false));
-
-        this.bindEvents();
-        this.refreshUnreadBadges();
-        setInterval(() => this.updatePendingFriendsCount(), 15000);
     },
 
     // ── Wiązanie zdarzeń ─────────────────────────────────────
     bindEvents() {
         document.querySelectorAll('.conv-item').forEach(item => {
             item.addEventListener('click', () => {
-                this.openChat(item.dataset.uid, item.dataset.name,
-                              item.dataset.avatar, item.dataset.initials);
+                if (item.dataset.type === 'group') {
+                    this.openGroupChat(
+                        item.dataset.chatId,
+                        item.dataset.name,
+                        item.dataset.avatar,
+                        item.dataset.initials,
+                        parseInt(item.dataset.memberCount) || 0
+                    );
+                } else {
+                    this.openChat(item.dataset.uid, item.dataset.name,
+                                  item.dataset.avatar, item.dataset.initials);
+                }
             });
         });
 
@@ -61,10 +77,12 @@ const ChatApp = {
         document.getElementById('mobileBack').addEventListener('click', () => {
             document.getElementById('chatSidebar').classList.remove('mob-hidden');
             document.getElementById('chatMain').classList.remove('mob-visible');
-            if (this.currentChatId) this.socket.emit('leave_chat', { chat_id: this.currentChatId });
+            if (this.currentChatId && this.socket) this.socket.emit('leave_chat', { chat_id: this.currentChatId });
             this.stopPolling();
             this.currentChatId   = null;
             this.currentFriendId = null;
+            this.currentChatType = null;
+            document.getElementById('groupMembersPanel').classList.remove('open');
             document.getElementById('chatWindow').style.display = 'none';
             document.getElementById('chatEmpty').style.display  = 'flex';
             document.querySelectorAll('.conv-item').forEach(el => el.classList.remove('active'));
@@ -74,22 +92,48 @@ const ChatApp = {
             const q = this.value.toLowerCase();
             document.querySelectorAll('.conv-item').forEach(el => {
                 const match = el.dataset.name.toLowerCase().includes(q) ||
-                              el.dataset.username.toLowerCase().includes(q);
+                              (el.dataset.username || '').toLowerCase().includes(q);
                 el.style.display = match ? 'flex' : 'none';
             });
+            // Ukryj etykietę sekcji jeśli wszystkie grupy są ukryte
+            const label = document.querySelector('.conv-section-label');
+            if (label) {
+                const anyGroupVisible = [...document.querySelectorAll('.conv-item[data-type="group"]')]
+                    .some(el => el.style.display !== 'none');
+                label.style.display = anyGroupVisible ? '' : 'none';
+            }
+        });
+
+        // ── Nowa Grupa ──
+        const newGroupBtn = document.getElementById('newGroupBtn');
+        if (newGroupBtn) {
+            newGroupBtn.addEventListener('click', () => this.openGroupModal());
+        }
+        document.getElementById('groupModalClose').addEventListener('click',  () => this.closeGroupModal());
+        document.getElementById('groupModalCancelBtn').addEventListener('click', () => this.closeGroupModal());
+        document.getElementById('groupModalCreateBtn').addEventListener('click', () => this.submitCreateGroup());
+        document.getElementById('groupModalOverlay').addEventListener('click', e => {
+            if (e.target === e.currentTarget) this.closeGroupModal();
+        });
+
+        // ── Panel uczestników ──
+        document.getElementById('groupMembersPanelClose').addEventListener('click', () => {
+            document.getElementById('groupMembersPanel').classList.remove('open');
         });
     },
 
-    // ── Otwarcie czatu ───────────────────────────────────────
+    // ── Otwarcie czatu prywatnego ────────────────────────────
     async openChat(friendId, friendName, avatarUrl, initials) {
-        if (this.currentFriendId === friendId) return;
+        if (this.currentFriendId === friendId && this.currentChatType === 'private') return;
 
         this.stopPolling();
         this.currentFriendId  = friendId;
+        this.currentChatType  = 'private';
         this.lastMsgDateKey   = null;
         this.oldestMsgId      = null;
         this.currentReadMsgId = null;
 
+        document.getElementById('groupMembersPanel').classList.remove('open');
         document.querySelectorAll('.conv-item').forEach(el => el.classList.remove('active'));
         const item = document.querySelector(`.conv-item[data-uid="${friendId}"]`);
         if (item) item.classList.add('active');
@@ -108,6 +152,8 @@ const ChatApp = {
             avEl.style.background = 'var(--border-color)';
         }
         document.getElementById('chatHeaderName').textContent = friendName;
+        document.getElementById('chatHeaderStatus').style.cursor = '';
+        document.getElementById('chatHeaderStatus').onclick = null;
         this.setStatus('Offline', false);
 
         const msgsDiv = document.getElementById('messages');
@@ -116,18 +162,77 @@ const ChatApp = {
             '<button class="btn-load-more" id="loadMoreBtn">Załaduj wcześniejsze wiadomości</button></div>';
         document.getElementById('loadMoreBtn').addEventListener('click', () => this.loadMore());
 
+        if (this.currentChatId && this.socket) this.socket.emit('leave_chat', { chat_id: this.currentChatId });
+
         try {
             const res  = await fetch(`get_or_create_chat.php?friend_id=${friendId}`);
             const data = await res.json();
             if (data.error) { showToast('Błąd: ' + data.error, 'error'); return; }
 
             this.currentChatId = data.chat_id;
-            this.socket.emit('join_chat', { chat_id: this.currentChatId });
+            if (this.socket) this.socket.emit('join_chat', { chat_id: this.currentChatId });
             await this.loadHistory();
             this.markAsRead(this.currentChatId, friendId);
             this.startPolling();
         } catch (err) {
             console.error('openChat error:', err);
+        }
+    },
+
+    // ── Otwarcie czatu grupowego ─────────────────────────────
+    async openGroupChat(chatId, groupName, avatarUrl, initials, memberCount) {
+        chatId = parseInt(chatId);
+        if (this.currentChatId === chatId && this.currentChatType === 'group') return;
+
+        this.stopPolling();
+        this.currentChatId   = chatId;
+        this.currentFriendId = null;
+        this.currentChatType = 'group';
+        this.lastMsgDateKey  = null;
+        this.oldestMsgId     = null;
+        this.currentReadMsgId = null;
+
+        document.getElementById('groupMembersPanel').classList.remove('open');
+        document.querySelectorAll('.conv-item').forEach(el => el.classList.remove('active'));
+        const item = document.querySelector(`.conv-item[data-chat-id="${chatId}"]`);
+        if (item) item.classList.add('active');
+
+        document.getElementById('chatSidebar').classList.add('mob-hidden');
+        document.getElementById('chatMain').classList.add('mob-visible');
+        document.getElementById('chatEmpty').style.display  = 'none';
+        document.getElementById('chatWindow').style.display = 'flex';
+
+        const avEl = document.getElementById('chatHeaderAv');
+        if (avatarUrl) {
+            avEl.innerHTML = `<img src="${esc(avatarUrl)}" alt=""
+                style="width:40px;height:40px;border-radius:50%;object-fit:cover;display:block;">`;
+            avEl.style.background = '';
+        } else {
+            avEl.textContent  = initials;
+            avEl.style.background = 'var(--primary-color)';
+            avEl.style.color  = '#fff';
+        }
+        document.getElementById('chatHeaderName').textContent = groupName;
+
+        const statusEl = document.getElementById('chatHeaderStatus');
+        statusEl.textContent = `${memberCount} uczestników – kliknij, aby zobaczyć`;
+        statusEl.className   = 'chat-header-status group-header-members';
+        statusEl.onclick     = () => this.toggleMembersPanel(chatId);
+
+        const msgsDiv = document.getElementById('messages');
+        msgsDiv.innerHTML =
+            '<div class="load-more-wrap" id="loadMoreWrap" style="display:none;">' +
+            '<button class="btn-load-more" id="loadMoreBtn">Załaduj wcześniejsze wiadomości</button></div>';
+        document.getElementById('loadMoreBtn').addEventListener('click', () => this.loadMore());
+
+        if (this.socket) this.socket.emit('join_chat', { chat_id: chatId });
+
+        try {
+            await this.loadHistory();
+            this.markGroupAsRead(chatId);
+            this.startPolling();
+        } catch (err) {
+            console.error('openGroupChat error:', err);
         }
     },
 
@@ -182,16 +287,20 @@ const ChatApp = {
     startPolling() {
         this.stopPolling();
         this.pollInterval = setInterval(async () => {
-            if (!this.currentChatId || !this.currentFriendId) return;
-            try {
-                const res  = await fetch(
-                    `get_read_status.php?chat_id=${this.currentChatId}&friend_id=${this.currentFriendId}`
-                );
-                const data = await res.json();
-                if (!data.error) {
-                    this.updateReadReceipt(data.last_read_id, data.friend_avatar, data.read_at);
-                }
-            } catch (e) {}
+            if (!this.currentChatId) return;
+
+            // Read receipt tylko dla prywatnych czatów
+            if (this.currentChatType === 'private' && this.currentFriendId) {
+                try {
+                    const res  = await fetch(
+                        `get_read_status.php?chat_id=${this.currentChatId}&friend_id=${this.currentFriendId}`
+                    );
+                    const data = await res.json();
+                    if (!data.error) {
+                        this.updateReadReceipt(data.last_read_id, data.friend_avatar, data.read_at);
+                    }
+                } catch (e) {}
+            }
             this.refreshUnreadBadges();
         }, 3000);
     },
@@ -207,10 +316,15 @@ const ChatApp = {
             const counts = await res.json();
             this.updateUnreadBadges(counts);
         } catch (e) {}
+        try {
+            const res    = await fetch('get_group_unread_counts.php');
+            const counts = await res.json();
+            this.updateGroupUnreadBadges(counts);
+        } catch (e) {}
     },
 
     updateUnreadBadges(counts) {
-        document.querySelectorAll('.conv-item').forEach(item => {
+        document.querySelectorAll('.conv-item[data-uid]').forEach(item => {
             const uid    = item.dataset.uid;
             const count  = counts[uid] || 0;
             const badge  = item.querySelector('.unread-badge');
@@ -230,7 +344,28 @@ const ChatApp = {
         });
     },
 
-    // ── Oznacz jako przeczytane ──────────────────────────────
+    updateGroupUnreadBadges(counts) {
+        document.querySelectorAll('.conv-item[data-type="group"]').forEach(item => {
+            const chatId = item.dataset.chatId;
+            const count  = counts[chatId] || 0;
+            const badge  = item.querySelector('.unread-badge');
+            const nameEl = item.querySelector('.conv-name');
+            const lastEl = item.querySelector('.conv-last');
+            if (count > 0) {
+                badge.textContent = count > 99 ? '99+' : count;
+                badge.classList.add('visible');
+                nameEl.classList.add('has-unread');
+                if (lastEl) lastEl.classList.add('has-unread');
+            } else {
+                badge.textContent = '';
+                badge.classList.remove('visible');
+                nameEl.classList.remove('has-unread');
+                if (lastEl) lastEl.classList.remove('has-unread');
+            }
+        });
+    },
+
+    // ── Oznacz jako przeczytane (prywatne) ───────────────────
     markAsRead(chatId, friendId) {
         fetch('mark_read.php', {
             method:  'POST',
@@ -248,7 +383,25 @@ const ChatApp = {
         }).catch(() => {});
     },
 
-    // ── Read receipt ─────────────────────────────────────────
+    // ── Oznacz jako przeczytane (grupowe) ────────────────────
+    markGroupAsRead(chatId) {
+        fetch('mark_read.php', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body:    `chat_id=${chatId}`
+        }).then(() => {
+            const item = document.querySelector(`.conv-item[data-chat-id="${chatId}"]`);
+            if (!item) return;
+            const badge  = item.querySelector('.unread-badge');
+            const nameEl = item.querySelector('.conv-name');
+            const lastEl = item.querySelector('.conv-last');
+            if (badge)  { badge.textContent = ''; badge.classList.remove('visible'); }
+            if (nameEl) nameEl.classList.remove('has-unread');
+            if (lastEl) lastEl.classList.remove('has-unread');
+        }).catch(() => {});
+    },
+
+    // ── Read receipt (tylko prywatne) ────────────────────────
     updateReadReceipt(lastReadId, friendAvatar, readAt) {
         if (!lastReadId) return;
         if (lastReadId === this.currentReadMsgId) return;
@@ -290,6 +443,14 @@ const ChatApp = {
         wrap.className = `msg-wrap ${type}`;
         if (msg.message_id) wrap.dataset.msgId = msg.message_id;
 
+        // Nazwa nadawcy w czacie grupowym (tylko dla otrzymanych)
+        if (type === 'received' && this.currentChatType === 'group' && msg.username) {
+            const senderEl = document.createElement('div');
+            senderEl.className   = 'msg-sender-name';
+            senderEl.textContent = msg.username;
+            wrap.appendChild(senderEl);
+        }
+
         if (msg.content && msg.content.trim()) {
             const bubble = document.createElement('div');
             bubble.className = 'msg-bubble';
@@ -312,7 +473,8 @@ const ChatApp = {
         timeEl.textContent = fmtTime(sentAt);
         meta.appendChild(timeEl);
 
-        if (type === 'sent' && msg.message_id) {
+        // Read receipt tylko w prywatnych czatach
+        if (type === 'sent' && msg.message_id && this.currentChatType !== 'group') {
             const rcAv = document.createElement('img');
             rcAv.className = 'read-receipt-av';
             rcAv.alt = 'Odczytano';
@@ -377,6 +539,7 @@ const ChatApp = {
             }
         }
 
+        if (!this.socket) { showToast('Brak połączenia z serwerem czatu', 'error'); return; }
         this.socket.emit('send_message', {
             chat_id:        this.currentChatId,
             content:        content,
@@ -393,14 +556,27 @@ const ChatApp = {
             const type = msg.user_id == this.userId ? 'sent' : 'received';
             this.appendMessage(msg, type);
             if (msg.user_id != this.userId) {
-                this.markAsRead(this.currentChatId, this.currentFriendId);
+                if (this.currentChatType === 'group') {
+                    this.markGroupAsRead(this.currentChatId);
+                } else {
+                    this.markAsRead(this.currentChatId, this.currentFriendId);
+                }
             }
         }
-        const targetFriendId = msg.user_id == this.userId ? this.currentFriendId : msg.user_id;
-        if (targetFriendId) {
-            const lastEl = document.getElementById(`last-msg-${targetFriendId}`);
+
+        // Aktualizuj podgląd ostatniej wiadomości w sidebarze
+        if (this.currentChatType === 'group') {
+            const lastEl = document.getElementById(`last-msg-group-${msg.chat_id}`);
             if (lastEl) {
                 lastEl.textContent = msg.attachment_url ? '📷 Zdjęcie' : (msg.content || '').substring(0, 38);
+            }
+        } else {
+            const targetFriendId = msg.user_id == this.userId ? this.currentFriendId : msg.user_id;
+            if (targetFriendId) {
+                const lastEl = document.getElementById(`last-msg-${targetFriendId}`);
+                if (lastEl) {
+                    lastEl.textContent = msg.attachment_url ? '📷 Zdjęcie' : (msg.content || '').substring(0, 38);
+                }
             }
         }
     },
@@ -418,6 +594,143 @@ const ChatApp = {
         if (!el) return;
         el.textContent = online ? '● ' + text : text;
         el.className   = 'chat-header-status' + (online ? ' is-online' : '');
+    },
+
+    // ── Panel uczestników grupy ──────────────────────────────
+    async toggleMembersPanel(chatId) {
+        const panel = document.getElementById('groupMembersPanel');
+        if (panel.classList.contains('open')) {
+            panel.classList.remove('open');
+            return;
+        }
+        try {
+            const res     = await fetch(`group_members_api.php?action=members&chat_id=${chatId}`);
+            const members = await res.json();
+            if (!Array.isArray(members)) { showToast('Błąd pobierania uczestników', 'error'); return; }
+
+            const list = document.getElementById('groupMembersList');
+            list.innerHTML = '';
+            members.forEach(m => {
+                const div = document.createElement('div');
+                div.className = 'group-member-item';
+                const initials = ((m.first_name || '').charAt(0) + (m.last_name || '').charAt(0)).toUpperCase();
+                div.innerHTML = `
+                    <div class="av-wrap" style="width:36px;height:36px;flex-shrink:0">
+                        ${m.avatar_url
+                            ? `<img src="${esc(m.avatar_url)}" class="av-img" style="width:36px;height:36px" alt="">`
+                            : `<div class="av-placeholder" style="width:36px;height:36px;font-size:13px">${esc(initials)}</div>`}
+                    </div>
+                    <div>
+                        <div class="group-member-name">${esc(m.first_name + ' ' + m.last_name)}</div>
+                        <div class="group-member-role">${m.role === 'admin' ? 'Administrator' : 'Uczestnik'}</div>
+                    </div>`;
+                list.appendChild(div);
+            });
+            panel.classList.add('open');
+        } catch (err) {
+            console.error('toggleMembersPanel error:', err);
+        }
+    },
+
+    // ── Modal nowej grupy ────────────────────────────────────
+    openGroupModal() {
+        document.getElementById('groupNameInput').value = '';
+        document.getElementById('groupDescInput').value = '';
+        document.querySelectorAll('.group-member-cb').forEach(cb => { cb.checked = false; });
+        const overlay = document.getElementById('groupModalOverlay');
+        overlay.style.display = 'flex';
+    },
+
+    closeGroupModal() {
+        document.getElementById('groupModalOverlay').style.display = 'none';
+    },
+
+    async submitCreateGroup() {
+        const name = document.getElementById('groupNameInput').value.trim();
+        if (!name) { showToast('Podaj nazwę grupy', 'error'); return; }
+
+        const selectedIds = [...document.querySelectorAll('.group-member-cb:checked')]
+            .map(cb => cb.value);
+        if (selectedIds.length === 0) {
+            showToast('Wybierz co najmniej jedną osobę', 'error');
+            return;
+        }
+
+        const description = document.getElementById('groupDescInput').value.trim();
+        const btn = document.getElementById('groupModalCreateBtn');
+        btn.disabled = true;
+        btn.textContent = 'Tworzę…';
+
+        try {
+            const formData = new URLSearchParams();
+            formData.append('name', name);
+            formData.append('description', description);
+            formData.append('csrf_token', APP_CONFIG.csrfToken);
+            selectedIds.forEach(id => formData.append('member_ids[]', id));
+
+            const res  = await fetch('create_group_chat.php', {
+                method:  'POST',
+                headers: {
+                    'Content-Type':  'application/x-www-form-urlencoded',
+                    'X-CSRF-Token':  APP_CONFIG.csrfToken,
+                },
+                body: formData.toString(),
+            });
+            const data = await res.json();
+
+            if (data.error) {
+                showToast('Błąd: ' + data.error, 'error');
+                return;
+            }
+
+            this.closeGroupModal();
+            showToast(`Grupa „${data.name}" została utworzona`, 'success');
+            this.addGroupToSidebar(data.chat_id, data.name, selectedIds.length + 1);
+            this.openGroupChat(data.chat_id, data.name, '', name.substring(0, 2).toUpperCase(), selectedIds.length + 1);
+        } catch (err) {
+            console.error('submitCreateGroup error:', err);
+            showToast('Błąd tworzenia grupy', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Utwórz grupę';
+        }
+    },
+
+    addGroupToSidebar(chatId, name, memberCount) {
+        const initials = name.substring(0, 2).toUpperCase();
+        const convsList = document.getElementById('convsList');
+
+        // Dodaj etykietę sekcji jeśli jej nie ma
+        if (!convsList.querySelector('.conv-section-label')) {
+            const label = document.createElement('div');
+            label.className = 'conv-section-label';
+            label.textContent = 'Grupy';
+            convsList.appendChild(label);
+        }
+
+        const div = document.createElement('div');
+        div.className = 'conv-item';
+        div.dataset.type        = 'group';
+        div.dataset.chatId      = chatId;
+        div.dataset.name        = name;
+        div.dataset.avatar      = '';
+        div.dataset.initials    = initials;
+        div.dataset.memberCount = memberCount;
+        div.innerHTML = `
+            <div class="av-wrap">
+                <div class="group-av-placeholder">${esc(initials)}</div>
+            </div>
+            <div class="conv-info">
+                <div class="conv-info-top">
+                    <div class="conv-name">${esc(name)}</div>
+                    <span class="unread-badge"></span>
+                </div>
+                <div class="conv-last" id="last-msg-group-${chatId}"></div>
+            </div>`;
+        div.addEventListener('click', () => {
+            this.openGroupChat(chatId, name, '', initials, memberCount);
+        });
+        convsList.appendChild(div);
     },
 
     // ── Plik ─────────────────────────────────────────────────
@@ -458,8 +771,11 @@ const ChatApp = {
     updatePendingFriendsCount() {
         fetch('index.php', {
             method:  'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body:    'action=get_pending_count'
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRF-Token': APP_CONFIG.csrfToken,
+            },
+            body: 'action=get_pending_count&csrf_token=' + encodeURIComponent(APP_CONFIG.csrfToken),
         })
         .then(r => r.json())
         .then(data => {

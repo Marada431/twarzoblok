@@ -113,7 +113,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_post'])) {
 // ─────────────────────────────────────────────
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
-    verify_csrf_token($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
+    $csrf_recv = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? ($_POST['csrf_token'] ?? '');
+    if (empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $csrf_recv)) {
+        header('Content-Type: application/json');
+        http_response_code(403);
+        echo json_encode(['success' => false, 'error' => 'csrf']);
+        exit;
+    }
     header('Content-Type: application/json');
     $action = $_POST['action'];
 
@@ -514,11 +520,16 @@ function renderPost(array $post, int $uid, array $preloaded = []): string {
         <div class="post-options-dropdown">
             <div class="post-options-trigger"><svg><use xlink:href="./icons/symbol-defs.svg#icon-list2"></use></svg></div>
             <div class="post-options-menu">
-                <a href="javascript:void(0)"
-                   class="post-options-item edit-post-trigger"
-                   data-post-id="<?= $pid ?>"
-                   data-post-content="<?= htmlspecialchars($post['content'], ENT_QUOTES, 'UTF-8') ?>">Edytuj</a>
-                <a href="javascript:void(0)" class="post-options-item danger" onclick="openModal('delete',<?= $pid ?>)">Usuń</a>
+                <?php if ((int)$post['author_id'] === $uid): ?>
+                    <!-- Opcje widoczne tylko dla autora posta -->
+                    <a href="javascript:void(0)"
+                       class="post-options-item edit-post-trigger"
+                       data-post-id="<?= $pid ?>"
+                       data-post-content="<?= htmlspecialchars($post['content'], ENT_QUOTES, 'UTF-8') ?>">Edytuj</a>
+                    <a href="javascript:void(0)" class="post-options-item danger" onclick="openModal('delete',<?= $pid ?>)">Usuń</a>
+                <?php endif; ?>
+
+                <!-- Opcja widoczna dla każdego zalogowanego użytkownika -->
                 <a href="javascript:void(0)" class="post-options-item" onclick="openModal('report',<?= $pid ?>)">Zgłoś</a>
             </div>
         </div>
