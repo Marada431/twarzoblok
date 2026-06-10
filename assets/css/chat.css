@@ -547,21 +547,25 @@
 .sidebar-head-top h3 { margin-bottom: 0; }
 
 .btn-new-group {
-    background: none;
+    background: var(--primary-color);
     border: none;
     cursor: pointer;
-    color: var(--text-muted);
-    border-radius: 50%;
-    width: 32px;
+    color: #fff;
+    border-radius: 20px;
+    padding: 6px 12px;
     height: 32px;
     display: flex;
     align-items: center;
-    justify-content: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
     transition: var(--transition);
     flex-shrink: 0;
+    white-space: nowrap;
 }
-.btn-new-group:hover { background: var(--bg-hover); color: var(--primary-color); }
-.btn-new-group svg { width: 18px; height: 18px; max-width: 18px; max-height: 18px; }
+.btn-new-group:hover { background: var(--primary-hover, #286b2b); }
+.btn-new-group svg { width: 14px; height: 14px; max-width: 14px; max-height: 14px; flex-shrink: 0; }
+.btn-new-group-label { line-height: 1; }
 
 .conv-section-label {
     padding: 10px 14px 4px;

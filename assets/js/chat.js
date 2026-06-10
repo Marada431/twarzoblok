@@ -18,6 +18,15 @@ const ChatApp = {
 
     // ── Inicjalizacja ────────────────────────────────────────
     init() {
+        // bindEvents() musi działać niezależnie od tego czy socket.io się załaduje
+        this.bindEvents();
+        this.refreshUnreadBadges();
+        setInterval(() => this.updatePendingFriendsCount(), 15000);
+
+        if (typeof io === 'undefined') {
+            console.error('❌ Socket.io niedostępne – serwer Node.js nie działa?');
+            return;
+        }
         this.socket = io('http://localhost:3000', { auth: { token: this.token } });
         this.socket.on('connect',       () => console.log('✅ Socket.io ok'));
         this.socket.on('connect_error', e  => console.error('❌ Socket:', e.message));
@@ -26,10 +35,6 @@ const ChatApp = {
         this.socket.on('new_message',  msg => this.onNewMessage(msg));
         this.socket.on('user_online',  d   => this.setUserOnline(d.user_id, true));
         this.socket.on('user_offline', d   => this.setUserOnline(d.user_id, false));
-
-        this.bindEvents();
-        this.refreshUnreadBadges();
-        setInterval(() => this.updatePendingFriendsCount(), 15000);
     },
 
     // ── Wiązanie zdarzeń ─────────────────────────────────────
@@ -72,7 +77,7 @@ const ChatApp = {
         document.getElementById('mobileBack').addEventListener('click', () => {
             document.getElementById('chatSidebar').classList.remove('mob-hidden');
             document.getElementById('chatMain').classList.remove('mob-visible');
-            if (this.currentChatId) this.socket.emit('leave_chat', { chat_id: this.currentChatId });
+            if (this.currentChatId && this.socket) this.socket.emit('leave_chat', { chat_id: this.currentChatId });
             this.stopPolling();
             this.currentChatId   = null;
             this.currentFriendId = null;
@@ -157,7 +162,7 @@ const ChatApp = {
             '<button class="btn-load-more" id="loadMoreBtn">Załaduj wcześniejsze wiadomości</button></div>';
         document.getElementById('loadMoreBtn').addEventListener('click', () => this.loadMore());
 
-        if (this.currentChatId) this.socket.emit('leave_chat', { chat_id: this.currentChatId });
+        if (this.currentChatId && this.socket) this.socket.emit('leave_chat', { chat_id: this.currentChatId });
 
         try {
             const res  = await fetch(`get_or_create_chat.php?friend_id=${friendId}`);
@@ -165,7 +170,7 @@ const ChatApp = {
             if (data.error) { showToast('Błąd: ' + data.error, 'error'); return; }
 
             this.currentChatId = data.chat_id;
-            this.socket.emit('join_chat', { chat_id: this.currentChatId });
+            if (this.socket) this.socket.emit('join_chat', { chat_id: this.currentChatId });
             await this.loadHistory();
             this.markAsRead(this.currentChatId, friendId);
             this.startPolling();
@@ -220,7 +225,7 @@ const ChatApp = {
             '<button class="btn-load-more" id="loadMoreBtn">Załaduj wcześniejsze wiadomości</button></div>';
         document.getElementById('loadMoreBtn').addEventListener('click', () => this.loadMore());
 
-        this.socket.emit('join_chat', { chat_id: chatId });
+        if (this.socket) this.socket.emit('join_chat', { chat_id: chatId });
 
         try {
             await this.loadHistory();
@@ -534,6 +539,7 @@ const ChatApp = {
             }
         }
 
+        if (!this.socket) { showToast('Brak połączenia z serwerem czatu', 'error'); return; }
         this.socket.emit('send_message', {
             chat_id:        this.currentChatId,
             content:        content,
