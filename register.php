@@ -14,7 +14,19 @@ require_once __DIR__ . '/app/controllers/AuthController.php';
 $controller = new AuthController(db());
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $controller->handleRegister();
+    $step = (int)($_POST['step'] ?? 1);
+    if ($step === 2) {
+        $controller->handleRegisterStep2();
+    } else {
+        $controller->handleRegisterStep1();
+    }
+} elseif (isset($_GET['back'])) {
+    $old = $_SESSION['register_step1'] ?? [];
+    unset($old['password']);
+    $data = ['errors' => [], 'old' => $old, 'step' => 1];
+    $controller->showRegister($data);
 } else {
-    $controller->showRegister();
+    $step = !empty($_SESSION['register_step1']) ? 2 : 1;
+    $data = ['errors' => [], 'old' => [], 'step' => $step];
+    $controller->showRegister($data);
 }
