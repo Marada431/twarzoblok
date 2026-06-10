@@ -18,7 +18,7 @@ $nav_active        = $nav_active        ?? '';
         <a href="reels.php" <?= $nav_active === 'reels'   ? 'style="color:var(--primary-color)"' : '' ?>>
             <svg><use xlink:href="./icons/symbol-defs.svg#icon-film"></use></svg>
         </a>
-        <a href="games.php" <?= $nav_active === 'games'   ? 'style="color:var(--primary-color)"' : '' ?>>
+        <a href="marketplace.php" <?= $nav_active === 'games'   ? 'style="color:var(--primary-color)"' : '' ?>>
             <svg><use xlink:href="./icons/symbol-defs.svg#icon-star-empty"></use></svg>
         </a>
         <a href="friend_requests.php" style="position:relative;display:inline-flex;align-items:center;<?= $nav_active === 'friends' ? 'color:var(--primary-color)' : '' ?>">

@@ -520,11 +520,16 @@ function renderPost(array $post, int $uid, array $preloaded = []): string {
         <div class="post-options-dropdown">
             <div class="post-options-trigger"><svg><use xlink:href="./icons/symbol-defs.svg#icon-list2"></use></svg></div>
             <div class="post-options-menu">
-                <a href="javascript:void(0)"
-                   class="post-options-item edit-post-trigger"
-                   data-post-id="<?= $pid ?>"
-                   data-post-content="<?= htmlspecialchars($post['content'], ENT_QUOTES, 'UTF-8') ?>">Edytuj</a>
-                <a href="javascript:void(0)" class="post-options-item danger" onclick="openModal('delete',<?= $pid ?>)">Usuń</a>
+                <?php if ((int)$post['author_id'] === $uid): ?>
+                    <!-- Opcje widoczne tylko dla autora posta -->
+                    <a href="javascript:void(0)"
+                       class="post-options-item edit-post-trigger"
+                       data-post-id="<?= $pid ?>"
+                       data-post-content="<?= htmlspecialchars($post['content'], ENT_QUOTES, 'UTF-8') ?>">Edytuj</a>
+                    <a href="javascript:void(0)" class="post-options-item danger" onclick="openModal('delete',<?= $pid ?>)">Usuń</a>
+                <?php endif; ?>
+
+                <!-- Opcja widoczna dla każdego zalogowanego użytkownika -->
                 <a href="javascript:void(0)" class="post-options-item" onclick="openModal('report',<?= $pid ?>)">Zgłoś</a>
             </div>
         </div>
