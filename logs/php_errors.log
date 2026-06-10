@@ -1,2 +1,6 @@
 [09-Jun-2026 11:14:13 Europe/Berlin] TwarzoBlok – link weryfikacyjny dla [w@wp.pl2]: http://localhost/auth/verify.php?token=65dca461239f4888c14f9c7f17d77b569ad90df9ebfb4b66472e256e549ed1cd
 [09-Jun-2026 11:14:15 Europe/Berlin] mail() zwróciło false dla: w@wp.pl2
+[10-Jun-2026 08:28:39 Europe/Berlin] check_user_status error: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'twarzobok.users' doesn't exist
+[10-Jun-2026 08:29:37 Europe/Berlin] DB Connection Error: SQLSTATE[HY000] [1049] Unknown database 'twarzobok'
+[10-Jun-2026 08:30:38 Europe/Berlin] check_user_status error: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'twarzobok.users' doesn't exist
+[10-Jun-2026 08:57:34 Europe/Berlin] Nieudana próba logowania dla: dawid1
